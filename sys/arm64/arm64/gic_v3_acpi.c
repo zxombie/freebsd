@@ -129,6 +129,9 @@ rdist_map(ACPI_SUBTABLE_HEADER *entry, void *arg)
 	case ACPI_MADT_TYPE_GENERIC_REDISTRIBUTOR:
 		redist = (ACPI_MADT_GENERIC_REDISTRIBUTOR *)entry;
 
+		/* Hack to get the GIC to attach on ThunderX2 */
+		redist->Length = MIN(redist->Length, 0x1000000);
+
 		madt_data->count++;
 		BUS_SET_RESOURCE(madt_data->parent, madt_data->dev,
 		    SYS_RES_MEMORY, madt_data->count, redist->BaseAddress,
