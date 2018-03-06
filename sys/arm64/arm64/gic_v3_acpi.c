@@ -315,6 +315,9 @@ gic_v3_add_children(ACPI_SUBTABLE_HEADER *entry, void *arg)
 		dev = arg;
 		sc = device_get_softc(dev);
 
+		if (sc->gic_nchildren > 0)
+			return;
+
 		child = device_add_child(dev, "its", -1);
 		if (child == NULL)
 			return;
