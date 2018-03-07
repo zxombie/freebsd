@@ -46,7 +46,9 @@ enum arm64_bus {
 extern enum arm64_bus arm64_bus_method;
 
 extern vm_paddr_t physmap[];
+extern vm_paddr_t physdmap[];
 extern u_int physmap_idx;
+extern u_int physdmap_idx;
 
 void dbg_init(void);
 void initarm(struct arm64_bootparams *);

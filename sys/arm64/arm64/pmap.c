@@ -583,8 +583,8 @@ pmap_bootstrap_dmap(vm_offset_t kern_l1, vm_paddr_t min_pa,
 #define	DMAP_TABLES	((DMAP_MAX_ADDRESS - DMAP_MIN_ADDRESS) >> L0_SHIFT)
 	memset(pagetable_dmap, 0, PAGE_SIZE * DMAP_TABLES);
 
-	for (i = 0; i < (physmap_idx * 2); i += 2) {
-		pa = physmap[i] & ~L2_OFFSET;
+	for (i = 0; i < (physdmap_idx * 2); i += 2) {
+		pa = physdmap[i] & ~L2_OFFSET;
 		va = pa - dmap_phys_base + DMAP_MIN_ADDRESS;
 
 		/* Create L2 mappings at the start of the region */
@@ -604,7 +604,7 @@ pmap_bootstrap_dmap(vm_offset_t kern_l1, vm_paddr_t min_pa,
 			}
 			KASSERT(l2 != NULL,
 			    ("pmap_bootstrap_dmap: NULL l2 map"));
-			for (; va < DMAP_MAX_ADDRESS && pa < physmap[i + 1];
+			for (; va < DMAP_MAX_ADDRESS && pa < physdmap[i + 1];
 			    pa += L2_SIZE, va += L2_SIZE) {
 				/*
 				 * We are on a boundary, stop to
@@ -623,8 +623,8 @@ pmap_bootstrap_dmap(vm_offset_t kern_l1, vm_paddr_t min_pa,
 			    ("..."));
 		}
 
-		for (; va < DMAP_MAX_ADDRESS && pa < physmap[i + 1] &&
-		    (physmap[i + 1] - pa) >= L1_SIZE;
+		for (; va < DMAP_MAX_ADDRESS && pa < physdmap[i + 1] &&
+		    (physdmap[i + 1] - pa) >= L1_SIZE;
 		    pa += L1_SIZE, va += L1_SIZE) {
 			l1_slot = ((va - DMAP_MIN_ADDRESS) >> L1_SHIFT);
 			pmap_load_store(&pagetable_dmap[l1_slot],
@@ -633,7 +633,7 @@ pmap_bootstrap_dmap(vm_offset_t kern_l1, vm_paddr_t min_pa,
 		}
 
 		/* Create L2 mappings at the end of the region */
-		if (pa < physmap[i + 1]) {
+		if (pa < physdmap[i + 1]) {
 			l1_slot = ((va - DMAP_MIN_ADDRESS) >> L1_SHIFT);
 			if (l1_slot != prev_l1_slot) {
 				prev_l1_slot = l1_slot;
@@ -649,7 +649,7 @@ pmap_bootstrap_dmap(vm_offset_t kern_l1, vm_paddr_t min_pa,
 			}
 			KASSERT(l2 != NULL,
 			    ("pmap_bootstrap_dmap: NULL l2 map"));
-			for (; va < DMAP_MAX_ADDRESS && pa < physmap[i + 1];
+			for (; va < DMAP_MAX_ADDRESS && pa < physdmap[i + 1];
 			    pa += L2_SIZE, va += L2_SIZE) {
 				l2_slot = pmap_l2_index(va);
 				pmap_load_store(&l2[l2_slot],

@@ -112,7 +112,9 @@ long Maxmem = 0;
 
 #define	PHYSMAP_SIZE	(2 * (VM_PHYSSEG_MAX - 1))
 vm_paddr_t physmap[PHYSMAP_SIZE];
+vm_paddr_t physdmap[PHYSMAP_SIZE];
 u_int physmap_idx;
+u_int physdmap_idx;
 
 struct kva_md_info kmi;
 
@@ -1055,8 +1057,11 @@ initarm(struct arm64_bootparams *abp)
 	physmap_idx = 0;
 	efihdr = (struct efi_map_header *)preload_search_info(kmdp,
 	    MODINFO_METADATA | MODINFOMD_EFI_MAP);
-	if (efihdr != NULL)
+	if (efihdr != NULL) {
 		add_efi_map_entries(efihdr, physmap, &physmap_idx);
+		memcpy(physdmap, physmap, sizeof(physmap));
+		physdmap_idx = physmap_idx;
+	}
 #ifdef FDT
 	else {
 		/* Grab physical memory regions information from device tree. */
