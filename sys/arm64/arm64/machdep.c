@@ -1061,6 +1061,7 @@ initarm(struct arm64_bootparams *abp)
 		add_efi_map_entries(efihdr, physmap, &physmap_idx);
 		memcpy(physdmap, physmap, sizeof(physmap));
 		physdmap_idx = physmap_idx;
+		physdmap[0] = rounddown2(physdmap[0], L1_SIZE);
 	}
 #ifdef FDT
 	else {
