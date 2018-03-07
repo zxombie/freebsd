@@ -1235,4 +1235,91 @@ DB_SHOW_COMMAND(vtop, db_show_vtop)
 	} else
 		db_printf("show vtop <virt_addr>\n");
 }
+
+DB_SHOW_COMMAND(efimem, db_show_efimem)
+{
+	caddr_t kmdp;
+	struct efi_map_header *efihdr;
+	struct efi_md *map, *p;
+	const char *type;
+	size_t efisz;
+	int ndesc, i;
+
+	static const char *types[] = {
+		"Reserved",
+		"LoaderCode",
+		"LoaderData",
+		"BootServicesCode",
+		"BootServicesData",
+		"RuntimeServicesCode",
+		"RuntimeServicesData",
+		"ConventionalMemory",
+		"UnusableMemory",
+		"ACPIReclaimMemory",
+		"ACPIMemoryNVS",
+		"MemoryMappedIO",
+		"MemoryMappedIOPortSpace",
+		"PalCode",
+		"PersistentMemory"
+	};
+
+	/* Find the kernel address */
+	kmdp = preload_search_by_type("elf kernel");
+	if (kmdp == NULL)
+		kmdp = preload_search_by_type("elf64 kernel");
+
+	efihdr = (struct efi_map_header *)preload_search_info(kmdp,
+	    MODINFO_METADATA | MODINFOMD_EFI_MAP);
+	if (efihdr == NULL) {
+		db_printf("No EFI memory table found\n");
+		return;
+	}
+
+	efisz = (sizeof(struct efi_map_header) + 0xf) & ~0xf;
+	map = (struct efi_md *)((uint8_t *)efihdr + efisz); 
+
+	db_printf("%23s %12s %12s %8s %4s\n",
+	    "Type", "Physical", "Virtual", "#Pages", "Attr");
+
+	if (efihdr->descriptor_size == 0)
+		return;
+	ndesc = efihdr->memory_size / efihdr->descriptor_size;
+
+	for (i = 0, p = map; i < ndesc; i++,
+	    p = efi_next_descriptor(p, efihdr->descriptor_size)) {
+		if (p->md_type < nitems(types))
+			type = types[p->md_type];
+		else
+			type = "<INVALID>";
+		db_printf("%23s %012lx %12p %08lx ", type, p->md_phys,
+		    p->md_virt, p->md_pages);
+		if (p->md_attr & EFI_MD_ATTR_UC)
+			printf("UC ");
+		if (p->md_attr & EFI_MD_ATTR_WC)
+			printf("WC ");
+		if (p->md_attr & EFI_MD_ATTR_WT)
+			printf("WT ");
+		if (p->md_attr & EFI_MD_ATTR_WB)
+			printf("WB ");
+		if (p->md_attr & EFI_MD_ATTR_UCE)
+			printf("UCE ");
+		if (p->md_attr & EFI_MD_ATTR_WP)
+			printf("WP ");
+		if (p->md_attr & EFI_MD_ATTR_RP)
+			printf("RP ");
+		if (p->md_attr & EFI_MD_ATTR_XP)
+			printf("XP ");
+		if (p->md_attr & EFI_MD_ATTR_NV)
+			printf("NV ");
+		if (p->md_attr & EFI_MD_ATTR_MORE_RELIABLE)
+			printf("MORE_RELIABLE ");
+		if (p->md_attr & EFI_MD_ATTR_RO)
+			printf("RO ");
+		if (p->md_attr & EFI_MD_ATTR_RT)
+			printf("RUNTIME");
+		if (PHYS_IN_DMAP(p->md_phys))
+			db_printf(" %lx", PHYS_TO_DMAP(p->md_phys));
+		db_printf("\n");
+	}
+}
 #endif
