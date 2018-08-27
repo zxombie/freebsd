@@ -122,7 +122,7 @@ __RCSID("$NetBSD: ubsan.c,v 1.3 2018/08/03 16:31:04 kamil Exp $");
 
 #define NUMBER_SIGNED_BIT	1U
 
-#if __SIZEOF_INT128__
+#if defined(__SIZEOF_INT128__)
 typedef __int128 longest;
 typedef unsigned __int128 ulongest;
 #else
