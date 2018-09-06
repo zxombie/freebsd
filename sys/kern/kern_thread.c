@@ -30,12 +30,14 @@
 
 #include "opt_witness.h"
 #include "opt_hwpmc_hooks.h"
+#include "opt_kcov.h"
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/kcov.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -531,6 +533,10 @@ thread_exit(void)
 	    (long)p->p_pid, td->td_name);
 	SDT_PROBE0(proc, , , lwp__exit);
 	KASSERT(TAILQ_EMPTY(&td->td_sigqueue.sq_list), ("signal pending"));
+
+#ifdef KCOV
+	kcov_thread_exit(td);
+#endif
 
 	/*
 	 * drop FPU & debug register state storage, or any other

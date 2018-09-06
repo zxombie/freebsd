@@ -113,6 +113,10 @@ PROF=		-pg
 .endif
 DEFINED_PROF=	${PROF}
 
+.if ${MK_KCOV} != "no"
+CFLAGS+=	-fsanitize-coverage=trace-pc
+.endif
+
 # Put configuration-specific C flags last (except for ${PROF}) so that they
 # can override the others.
 CFLAGS+=	${CONF_CFLAGS}
