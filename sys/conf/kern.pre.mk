@@ -113,9 +113,11 @@ PROF=		-pg
 .endif
 DEFINED_PROF=	${PROF}
 
-.if ${MK_KCOV} != "no"
-CFLAGS+=	-fsanitize-coverage=trace-pc
+KCOV_ENABLED!=	grep KCOV opt_kcov.h || true ; echo
+.if !empty(KCOV_ENABLED)
+SAN_CFLAGS+=	-fsanitize-coverage=trace-pc
 .endif
+CFLAGS+=	${SAN_CFLAGS}
 
 # Put configuration-specific C flags last (except for ${PROF}) so that they
 # can override the others.
