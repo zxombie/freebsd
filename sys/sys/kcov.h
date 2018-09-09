@@ -37,7 +37,6 @@
 
 #define KCOV_MAXENTRIES (1 << 24)		/* 16M */
 
-#define KCOV_MODE_NONE		-1
 #define KCOV_MODE_TRACE_PC	0
 #define KCOV_MODE_TRACE_CMP	1
 

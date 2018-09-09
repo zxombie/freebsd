@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
  * Copyright (C) 2018 The FreeBSD Foundation. All rights reserved.
+ * Copyright (C) 2018 Andrew Turner
  *
  * This software was developed by Mitchell Horne under sponsorship of
  * the FreeBSD Foundation.
@@ -51,17 +52,28 @@ __FBSDID("$FreeBSD$");
 
 #include <vm/pmap.h>
 
-#define BUF_SIZE_BYTES(info)						\
-    (info != NULL ? (size_t)info->size * sizeof(uintptr_t) : 0)
-
 MALLOC_DEFINE(M_KCOV_INFO, "kcovinfo", "KCOV info type");
 MALLOC_DEFINE(M_KCOV_BUF, "kcovbuffer", "KCOV buffer type");
 
+/*
+ * - Only move away from the running state in the current thread. This is to
+ *   ensure we are not currently recording a trace while this happens.
+ * - There need to be barriers before moving to the running state and after
+ *   leaving it. This ensures a consistent state if an interrupt happens
+ *   when enabling or disabling.
+ */
+
+typedef enum {
+	KCOV_STATE_INVALID,
+	KCOV_STATE_OPEN,	/* The device is open, but with no buffer */
+	KCOV_STATE_READY,	/* The buffer has been allocated */
+	KCOV_STATE_RUNNING,	/* Recording trace data */
+} kcov_state_t;
+
 struct kcov_info {
-	struct sx	lock;
-	struct thread	*td;
 	uintptr_t	*buf;
-	u_int		size;
+	size_t		entries;
+	kcov_state_t	state;
 	int		mode;
 };
 
@@ -71,11 +83,8 @@ static d_close_t	kcov_close;
 static d_mmap_t		kcov_mmap;
 static d_ioctl_t	kcov_ioctl;
 
-static void kcov_info_reset(struct kcov_info *info);
 static int  kcov_alloc(struct kcov_info *info, u_int entries);
 static void kcov_init(const void *unused);
-
-static bool kcov_initialized = false;
 
 static struct cdevsw kcov_cdevsw = {
 	.d_version =	D_VERSION,
@@ -107,60 +116,87 @@ __sanitizer_cov_trace_pc(void)
 	 * To guarantee curthread is properly set, we exit early
 	 * until the driver has been initialized
 	 */
-	if (!kcov_initialized)
+	if (cold)
 		return;
 
 	td = curthread;
-	info = td->td_kcov_info;
+
+	/* We might have a NULL thread when releasing the secondary CPUs */
+	if (td == NULL)
+		return;
 
 	/*
-	 * Check first that KCOV is enabled for the current thread.
-	 * Additionally, we want to exclude (for now) all code that
-	 * is not explicitly part of syscall call chain, such as
-	 * interrupt handlers, since we are mainly interested in
-	 * finding non-trivial paths through the syscall.
+	 * We are in an interrupt, stop tracing as it is not explicitly
+	 * part of a syscall.
 	 */
-	if (info == NULL || info->buf == NULL ||
-	    info->mode != KCOV_MODE_TRACE_PC ||
-	    td->td_intr_nesting_level > 0 || !interrupts_enabled())
+	if (td->td_intr_nesting_level > 0 || td->td_intr_frame != NULL)
 		return;
+
+	/*
+	 * If info is NULL or the state is not running we are not tracing.
+	 */
+	info = td->td_kcov_info;
+	if (info == NULL || info->state != KCOV_STATE_RUNNING)
+		return;
+
+	/*
+	 * Check we are in the PC-trace mode.
+	 */
+	if (info->mode != KCOV_MODE_TRACE_PC)
+		return;
+
+	KASSERT(info->buf != NULL,
+	    ("__sanitizer_cov_trace_pc: NULL buf while running"));
 
 	/* The first entry of the buffer holds the index */
 	index = info->buf[0];
-	if (index < info->size) {
+	if (index < info->entries) {
 		info->buf[index + 1] =
 		    (uintptr_t)__builtin_return_address(0);
 		info->buf[0] = index + 1;
 	}
 }
 
+static void
+kcov_dtor(void *data __unused)
+{
+}
+
 static int
 kcov_open(struct cdev *dev, int oflags, int devtype, struct thread *td)
 {
 	struct kcov_info *info;
+	int error;
 
-	info = malloc(sizeof(struct kcov_info), M_KCOV_INFO,
-	    M_ZERO | M_WAITOK);
-	kcov_info_reset(info);
-	sx_init(&info->lock, "kcov_lock");
-	dev->si_drv1 = info;
+	info = malloc(sizeof(struct kcov_info), M_KCOV_INFO, M_ZERO | M_WAITOK);
 
-	return (0);
+	error = devfs_set_cdevpriv(info, kcov_dtor);
+	if (error == 0) {
+		info->state = KCOV_STATE_OPEN;
+		info->mode = -1;
+	} else {
+		free(info, M_KCOV_INFO);
+	}
+
+	return (error);
 }
 
 static int
 kcov_close(struct cdev *dev, int fflag, int devtype, struct thread *td)
 {
 	struct kcov_info *info;
+	int error;
 
-	info = dev->si_drv1;
-	if (info == NULL)
-		return (EINVAL);
+	error = devfs_get_cdevpriv((void **)&info);
+	if (error)
+		return (error);
 
-	if (info->td != NULL)
-		info->td->td_kcov_info = NULL;
-	dev->si_drv1 = NULL;
-	sx_destroy(&info->lock);
+	KASSERT(info != NULL, ("kcov_close with no kcov_info structure"));
+
+	/* Trying to close, but haven't disabled */
+	if (info->state == KCOV_STATE_RUNNING)
+		return (EBUSY);
+
 	free(info->buf, M_KCOV_BUF);
 	free(info, M_KCOV_INFO);
 
@@ -172,29 +208,21 @@ kcov_mmap(struct cdev *dev, vm_ooffset_t offset, vm_paddr_t *paddr,
     int prot, vm_memattr_t *memattr __unused)
 {
 	struct kcov_info *info;
+	int error;
 
 	if (prot & PROT_EXEC)
 		return (EINVAL);
 
-	info = dev->si_drv1;
-	if (info->buf == NULL || offset < 0 || offset >= BUF_SIZE_BYTES(info))
+	error = devfs_get_cdevpriv((void **)&info);
+	if (error)
+		return (error);
+
+	if (info->buf == NULL || offset < 0 ||
+	    offset >= info->entries * sizeof(uintptr_t))
 		return (EINVAL);
 
 	*paddr = vtophys(info->buf) + offset;
 	return (0);
-}
-
-static void
-kcov_info_reset(struct kcov_info *info)
-{
-
-	if (info == NULL)
-		return;
-
-	free(info->buf, M_KCOV_BUF);
-	info->buf = NULL;
-	info->mode = KCOV_MODE_NONE;
-	info->size = 0;
 }
 
 static int
@@ -202,15 +230,18 @@ kcov_alloc(struct kcov_info *info, u_int entries)
 {
 	size_t buf_size;
 
-	if (entries > kcov_max_entries)
+	KASSERT(info->buf == NULL, ("kcov_alloc: Already have a buffer"));
+	KASSERT(info->state == KCOV_STATE_OPEN,
+	    ("kcov_alloc: Not in open state (%x)", info->state));
+
+	if (entries < 2 || entries > kcov_max_entries)
 		return (EINVAL);
 
 	/* Align to page size so mmap can't access other kernel memory */
-	buf_size = roundup2((entries + 1) * sizeof(uintptr_t), PAGE_SIZE);
+	buf_size = roundup2(entries * sizeof(uintptr_t), PAGE_SIZE);
 
-	kcov_info_reset(info);
 	info->buf = malloc(buf_size, M_KCOV_BUF, M_ZERO | M_WAITOK);
-	info->size = entries;
+	info->entries = entries;
 
 	return (0);
 }
@@ -220,49 +251,65 @@ kcov_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag __unused,
     struct thread *td)
 {
 	struct kcov_info *info;
-	int error;
+	int mode, error;
+
+	error = devfs_get_cdevpriv((void **)&info);
+	if (error)
+		return (error);
 
 	error = 0;
-	info = dev->si_drv1;
 
-	sx_xlock(&info->lock);
 	switch (cmd) {
 	case KIOSETBUFSIZE:
 		/*
 		 * Set the size of the coverage buffer. Should be called
 		 * before enabling coverage collection for that thread.
 		 */
-		if (info->td != NULL) {
+		if (info->state != KCOV_STATE_OPEN) {
 			error = EBUSY;
 			break;
 		}
 		error = kcov_alloc(info, *(u_int *)data);
+		info->state = KCOV_STATE_READY;
 		break;
 	case KIOENABLE:
-		/* Only enable if not currently owned */
-		if (info->td != NULL) {
+		if (info->state != KCOV_STATE_READY) {
 			error = EBUSY;
 			break;
 		}
-		info->mode = *(int *)data;
-		td->td_kcov_info = info;
-		info->td = td;
-		break;
-	case KIODISABLE:
-		/* Only the currently enabled thread may disable itself */
-		if (info->td != td) {
+		if (td->td_kcov_info != NULL) {
 			error = EINVAL;
 			break;
 		}
-		info->mode = KCOV_MODE_NONE;
+		mode = *(int *)data;
+		if (mode != KCOV_MODE_TRACE_PC) {
+			error = EINVAL;
+			break;
+		}
+		td->td_kcov_info = info;
+		info->mode = mode;
+		/*
+		 * Atomically store the pointer to the info struct to protect
+		 * against an interrupt happening at the wrong time.
+		 */
+		atomic_thread_fence_seq_cst();
+		info->state = KCOV_STATE_RUNNING;
+		break;
+	case KIODISABLE:
+		/* Only the currently enabled thread may disable itself */
+		if (info->state != KCOV_STATE_RUNNING ||
+		    info != td->td_kcov_info) {
+			error = EINVAL;
+			break;
+		}
+		info->state = KCOV_STATE_READY;
+		atomic_thread_fence_seq_cst();
 		td->td_kcov_info = NULL;
-		info->td = NULL;
 		break;
 	default:
 		error = EINVAL;
 		break;
 	}
-	sx_xunlock(&info->lock);
 
 	return (error);
 }
@@ -282,8 +329,6 @@ kcov_init(const void *unused)
 		printf("%s", "Failed to create kcov device");
 		return;
 	}
-
-	kcov_initialized = true;
 }
 
 /*
@@ -292,11 +337,14 @@ kcov_init(const void *unused)
 void
 kcov_thread_exit(struct thread *td)
 {
+#if 0
+	struct kcov_info *info;
 
 	if (td->td_kcov_info != NULL) {
-		td->td_kcov_info->td = NULL;
-		td->td_kcov_info = NULL;
+		info = td->td_kcov_info;
+		/* TODO */
 	}
+#endif
 }
 
 SYSINIT(kcovdev, SI_SUB_DEVFS, SI_ORDER_ANY, kcov_init, NULL);
