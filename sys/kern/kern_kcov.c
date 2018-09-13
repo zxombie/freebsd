@@ -72,7 +72,7 @@ typedef enum {
 
 struct kcov_info {
 	uintptr_t	*buf;
-	size_t		entries;
+	size_t		size;
 	kcov_state_t	state;
 	int		mode;
 };
@@ -83,7 +83,7 @@ static d_close_t	kcov_close;
 static d_mmap_t		kcov_mmap;
 static d_ioctl_t	kcov_ioctl;
 
-static int  kcov_alloc(struct kcov_info *info, u_int entries);
+static int  kcov_alloc(struct kcov_info *info, size_t size);
 static void kcov_init(const void *unused);
 
 static struct cdevsw kcov_cdevsw = {
@@ -95,10 +95,12 @@ static struct cdevsw kcov_cdevsw = {
 	.d_name =	"kcov",
 };
 
-static u_int kcov_max_entries = KCOV_MAXENTRIES;
-SYSCTL_UINT(_kern, OID_AUTO, kcov_max_entries, CTLFLAG_RW,
-    &kcov_max_entries, 0,
-    "Maximum number of entries that can be stored in a kcov buffer");
+SYSCTL_NODE(_kern, OID_AUTO, kcov, CTLFLAG_RW, 0, "Kernel coverage");
+
+static u_int kcov_max_size = KCOV_MAXENTRIES;
+SYSCTL_UINT(_kern_kcov, OID_AUTO, max_size, CTLFLAG_RW,
+    &kcov_max_size, 0,
+    "Maximum size of the kcov buffer");
 
 static struct mtx kcov_mtx;
 
@@ -152,7 +154,7 @@ __sanitizer_cov_trace_pc(void)
 
 	/* The first entry of the buffer holds the index */
 	index = info->buf[0];
-	if (index < info->entries) {
+	if (index < info->size / sizeof(info->buf[0])) {
 		info->buf[index + 1] =
 		    (uintptr_t)__builtin_return_address(0);
 		info->buf[0] = index + 1;
@@ -219,8 +221,7 @@ kcov_mmap(struct cdev *dev, vm_ooffset_t offset, vm_paddr_t *paddr,
 
 	info = dev->si_drv1;
 
-	if (info->buf == NULL || offset < 0 ||
-	    offset >= info->entries * sizeof(uintptr_t))
+	if (info->buf == NULL || offset < 0 || offset >= info->size)
 		return (EINVAL);
 
 	*paddr = vtophys(info->buf) + offset;
@@ -228,7 +229,7 @@ kcov_mmap(struct cdev *dev, vm_ooffset_t offset, vm_paddr_t *paddr,
 }
 
 static int
-kcov_alloc(struct kcov_info *info, u_int entries)
+kcov_alloc(struct kcov_info *info, size_t size)
 {
 	size_t buf_size;
 
@@ -236,14 +237,14 @@ kcov_alloc(struct kcov_info *info, u_int entries)
 	KASSERT(info->state == KCOV_STATE_OPEN,
 	    ("kcov_alloc: Not in open state (%x)", info->state));
 
-	if (entries < 2 || entries > kcov_max_entries)
+	if (size < 2 * sizeof(info->buf[0]) || size > kcov_max_size)
 		return (EINVAL);
 
 	/* Align to page size so mmap can't access other kernel memory */
-	buf_size = roundup2(entries * sizeof(uintptr_t), PAGE_SIZE);
+	buf_size = roundup2(size, PAGE_SIZE);
 
 	info->buf = malloc(buf_size, M_KCOV_BUF, M_ZERO | M_WAITOK);
-	info->entries = entries;
+	info->size = size;
 
 	return (0);
 }
