@@ -42,7 +42,7 @@
 
 /* KCOV ioctls */
 #define KIOENABLE	_IOWINT('c', 2)	/* Enable coverage recording */
-#define KIODISABLE	_IO('c', 3)		/* Disable coverage recording */
+#define KIODISABLE	_IO('c', 3)	/* Disable coverage recording */
 #define KIOSETBUFSIZE	_IOWINT('c', 4)	/* Set the buffer size */
 
 #define	KCOV_CMP_CONST		(1 << 0)
