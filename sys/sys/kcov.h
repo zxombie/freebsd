@@ -45,10 +45,13 @@
 #define KIODISABLE	_IO('c', 3)		/* Disable coverage recording */
 #define KIOSETBUFSIZE	_IOWINT('c', 4)	/* Set the buffer size */
 
+#define	KCOV_CMP_CONST		(1 << 0)
+#define	KCOV_CMP_SIZE(x)	((x) << 1)
+#define	KCOV_CMP_MASK		(3 << 1)
+
 #ifdef _KERNEL
 
 void kcov_thread_exit(struct thread *);
-void __sanitizer_cov_trace_pc(void);
 
 #endif /* _KERNEL */
 #endif /* _SYS_KCOV_H_ */

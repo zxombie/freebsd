@@ -115,7 +115,7 @@ DEFINED_PROF=	${PROF}
 
 KCOV_ENABLED!=	grep KCOV opt_kcov.h || true ; echo
 .if !empty(KCOV_ENABLED)
-SAN_CFLAGS+=	-fsanitize-coverage=trace-pc
+SAN_CFLAGS+=	-fsanitize-coverage=trace-pc,trace-cmp
 .endif
 CFLAGS+=	${SAN_CFLAGS}
 

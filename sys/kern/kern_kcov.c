@@ -71,7 +71,7 @@ typedef enum {
 } kcov_state_t;
 
 struct kcov_info {
-	uintptr_t	*buf;
+	uint64_t	*buf;
 	size_t		size;
 	kcov_state_t	state;
 	int		mode;
@@ -82,6 +82,17 @@ static d_open_t		kcov_open;
 static d_close_t	kcov_close;
 static d_mmap_t		kcov_mmap;
 static d_ioctl_t	kcov_ioctl;
+
+void __sanitizer_cov_trace_pc(void);
+void __sanitizer_cov_trace_cmp1(uint8_t, uint8_t);
+void __sanitizer_cov_trace_cmp2(uint16_t, uint16_t);
+void __sanitizer_cov_trace_cmp4(uint32_t, uint32_t);
+void __sanitizer_cov_trace_cmp8(uint64_t, uint64_t);
+void __sanitizer_cov_trace_const_cmp1(uint8_t, uint8_t);
+void __sanitizer_cov_trace_const_cmp2(uint16_t, uint16_t);
+void __sanitizer_cov_trace_const_cmp4(uint32_t, uint32_t);
+void __sanitizer_cov_trace_const_cmp8(uint64_t, uint64_t);
+void __sanitizer_cov_trace_switch(uint64_t, uint64_t *);
 
 static int  kcov_alloc(struct kcov_info *info, size_t size);
 static void kcov_init(const void *unused);
@@ -104,6 +115,32 @@ SYSCTL_UINT(_kern_kcov, OID_AUTO, max_size, CTLFLAG_RW,
 
 static struct mtx kcov_mtx;
 
+static struct kcov_info *
+get_kinfo(struct thread *td)
+{
+	struct kcov_info *info;
+
+	/* We might have a NULL thread when releasing the secondary CPUs */
+	if (td == NULL)
+		return (NULL);
+
+	/*
+	 * We are in an interrupt, stop tracing as it is not explicitly
+	 * part of a syscall.
+	 */
+	if (td->td_intr_nesting_level > 0 || td->td_intr_frame != NULL)
+		return (NULL);
+
+	/*
+	 * If info is NULL or the state is not running we are not tracing.
+	 */
+	info = td->td_kcov_info;
+	if (info == NULL || info->state != KCOV_STATE_RUNNING)
+		return (NULL);
+
+	return (info);
+}
+
 /*
  * Main entry point. A call to this function will be inserted
  * at every edge, and if coverage is enabled for the thread
@@ -114,7 +151,7 @@ __sanitizer_cov_trace_pc(void)
 {
 	struct thread *td;
 	struct kcov_info *info;
-	u_int index;
+	uint64_t index;
 
 	/*
 	 * To guarantee curthread is properly set, we exit early
@@ -124,23 +161,8 @@ __sanitizer_cov_trace_pc(void)
 		return;
 
 	td = curthread;
-
-	/* We might have a NULL thread when releasing the secondary CPUs */
-	if (td == NULL)
-		return;
-
-	/*
-	 * We are in an interrupt, stop tracing as it is not explicitly
-	 * part of a syscall.
-	 */
-	if (td->td_intr_nesting_level > 0 || td->td_intr_frame != NULL)
-		return;
-
-	/*
-	 * If info is NULL or the state is not running we are not tracing.
-	 */
-	info = td->td_kcov_info;
-	if (info == NULL || info->state != KCOV_STATE_RUNNING)
+	info = get_kinfo(td);
+	if (info == NULL)
 		return;
 
 	/*
@@ -154,11 +176,157 @@ __sanitizer_cov_trace_pc(void)
 
 	/* The first entry of the buffer holds the index */
 	index = info->buf[0];
-	if (index < info->size / sizeof(info->buf[0])) {
-		info->buf[index + 1] =
-		    (uintptr_t)__builtin_return_address(0);
-		info->buf[0] = index + 1;
+	if (index + 2 >= info->size / sizeof(info->buf[0]))
+		return;
+
+	info->buf[index + 1] = (uint64_t)__builtin_return_address(0);
+	info->buf[0] = index + 1;
+}
+
+static bool
+trace_cmp(uint64_t type, uint64_t arg1, uint64_t arg2, uint64_t ret)
+{
+	struct thread *td;
+	struct kcov_info *info;
+	uint64_t index;
+
+	/*
+	 * To guarantee curthread is properly set, we exit early
+	 * until the driver has been initialized
+	 */
+	if (cold)
+		return (false);
+
+	td = curthread;
+	info = get_kinfo(td);
+	if (info == NULL)
+		return (false);
+
+	/*
+	 * Check we are in the comparison-trace mode.
+	 */
+	if (info->mode != KCOV_MODE_TRACE_CMP)
+		return (false);
+
+	KASSERT(info->buf != NULL,
+	    ("__sanitizer_cov_trace_pc: NULL buf while running"));
+
+	/* The first entry of the buffer holds the index */
+	index = info->buf[0];
+
+	/* Check we have space to store all elements */
+	if (index * 4 + 5 >= info->size / sizeof(info->buf[0]))
+		return (false);
+
+	info->buf[index * 4 + 1] = type;
+	info->buf[index * 4 + 2] = arg1;
+	info->buf[index * 4 + 3] = arg2;
+	info->buf[index * 4 + 4] = ret;
+	info->buf[0] = index + 1;
+
+	return (true);
+}
+
+void
+__sanitizer_cov_trace_cmp1(uint8_t arg1, uint8_t arg2)
+{
+
+	trace_cmp(KCOV_CMP_SIZE(0), arg1, arg2,
+	    (uint64_t)__builtin_return_address(0));
+}
+
+void
+__sanitizer_cov_trace_cmp2(uint16_t arg1, uint16_t arg2)
+{
+
+	trace_cmp(KCOV_CMP_SIZE(1), arg1, arg2,
+	    (uint64_t)__builtin_return_address(0));
+}
+
+void
+__sanitizer_cov_trace_cmp4(uint32_t arg1, uint32_t arg2)
+{
+
+	trace_cmp(KCOV_CMP_SIZE(2), arg1, arg2,
+	    (uint64_t)__builtin_return_address(0));
+}
+
+void
+__sanitizer_cov_trace_cmp8(uint64_t arg1, uint64_t arg2)
+{
+
+	trace_cmp(KCOV_CMP_SIZE(3), arg1, arg2,
+	    (uint64_t)__builtin_return_address(0));
+}
+
+void
+__sanitizer_cov_trace_const_cmp1(uint8_t arg1, uint8_t arg2)
+{
+
+	trace_cmp(KCOV_CMP_SIZE(0) | KCOV_CMP_CONST, arg1, arg2,
+	    (uint64_t)__builtin_return_address(0));
+}
+
+void
+__sanitizer_cov_trace_const_cmp2(uint16_t arg1, uint16_t arg2)
+{
+
+	trace_cmp(KCOV_CMP_SIZE(1) | KCOV_CMP_CONST, arg1, arg2,
+	    (uint64_t)__builtin_return_address(0));
+}
+
+void
+__sanitizer_cov_trace_const_cmp4(uint32_t arg1, uint32_t arg2)
+{
+
+	trace_cmp(KCOV_CMP_SIZE(2) | KCOV_CMP_CONST, arg1, arg2,
+	    (uint64_t)__builtin_return_address(0));
+}
+
+void
+__sanitizer_cov_trace_const_cmp8(uint64_t arg1, uint64_t arg2)
+{
+
+	trace_cmp(KCOV_CMP_SIZE(3) | KCOV_CMP_CONST, arg1, arg2,
+	    (uint64_t)__builtin_return_address(0));
+}
+
+/*
+ * val is the switch operand
+ * cases[0] is the number of case constants
+ * cases[1] is the size of val in bits
+ * cases[2..n] are the case constants
+ */
+void
+__sanitizer_cov_trace_switch(uint64_t val, uint64_t *cases)
+{
+	uint64_t i, count, ret, type;
+
+	count = cases[0];
+	ret = (uint64_t)__builtin_return_address(0);
+
+	switch (cases[1]) {
+	case 8:
+		type = KCOV_CMP_SIZE(3);
+		break;
+	case 16:
+		type = KCOV_CMP_SIZE(3);
+		break;
+	case 32:
+		type = KCOV_CMP_SIZE(3);
+		break;
+	case 64:
+		type = KCOV_CMP_SIZE(3);
+		break;
+	default:
+		return;
 	}
+
+	val |= KCOV_CMP_CONST;
+
+	for (i = 0; i < count; i++)
+		if (!trace_cmp(type, val, cases[i + 2], ret))
+			return;
 }
 
 static int
@@ -283,7 +451,7 @@ kcov_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag __unused,
 			break;
 		}
 		mode = *(int *)data;
-		if (mode != KCOV_MODE_TRACE_PC) {
+		if (mode != KCOV_MODE_TRACE_PC && mode != KCOV_MODE_TRACE_CMP) {
 			error = EINVAL;
 			break;
 		}
