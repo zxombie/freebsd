@@ -41,11 +41,9 @@
 #define KCOV_MODE_TRACE_CMP	1
 
 /* KCOV ioctls */
-#define KIOENABLE	_IOW('c', 2, int)	/* Enable coverage recording */
+#define KIOENABLE	_IOWINT('c', 2)	/* Enable coverage recording */
 #define KIODISABLE	_IO('c', 3)		/* Disable coverage recording */
-#define KIOSETBUFSIZE	_IOW('c', 4, u_int)	/* Set the buffer size */
-#define KIONREAD	_IOR('c', 5, u_int)	/* Entries available for read */
-#define KIORESET	_IO('c', 6)		/* Reset the buffer index */
+#define KIOSETBUFSIZE	_IOWINT('c', 4)	/* Set the buffer size */
 
 #ifdef _KERNEL
 
