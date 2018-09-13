@@ -100,6 +100,8 @@ SYSCTL_UINT(_kern, OID_AUTO, kcov_max_entries, CTLFLAG_RW,
     &kcov_max_entries, 0,
     "Maximum number of entries that can be stored in a kcov buffer");
 
+static struct mtx kcov_mtx;
+
 /*
  * Main entry point. A call to this function will be inserted
  * at every edge, and if coverage is enabled for the thread
@@ -157,45 +159,48 @@ __sanitizer_cov_trace_pc(void)
 	}
 }
 
-static void
-kcov_dtor(void *data __unused)
-{
-}
-
 static int
 kcov_open(struct cdev *dev, int oflags, int devtype, struct thread *td)
 {
 	struct kcov_info *info;
-	int error;
 
+	/*
+	 * TODO: We could use devfs_set_cdevpriv, but it needs care around
+	 * mmap. For now only allow a single user to open the device at a
+	 * time.
+	 */
 	info = malloc(sizeof(struct kcov_info), M_KCOV_INFO, M_ZERO | M_WAITOK);
+	info->state = KCOV_STATE_OPEN;
+	info->mode = -1;
 
-	error = devfs_set_cdevpriv(info, kcov_dtor);
-	if (error == 0) {
-		info->state = KCOV_STATE_OPEN;
-		info->mode = -1;
-	} else {
+	mtx_lock(&kcov_mtx);
+	if (dev->si_drv1 != NULL) {
+		mtx_unlock(&kcov_mtx);
 		free(info, M_KCOV_INFO);
+		return (EBUSY);
 	}
 
-	return (error);
+	dev->si_drv1 = info;
+	mtx_unlock(&kcov_mtx);
+
+	return (0);
 }
 
 static int
 kcov_close(struct cdev *dev, int fflag, int devtype, struct thread *td)
 {
 	struct kcov_info *info;
-	int error;
 
-	error = devfs_get_cdevpriv((void **)&info);
-	if (error)
-		return (error);
+	info = dev->si_drv1;
 
 	KASSERT(info != NULL, ("kcov_close with no kcov_info structure"));
 
 	/* Trying to close, but haven't disabled */
 	if (info->state == KCOV_STATE_RUNNING)
 		return (EBUSY);
+
+	dev->si_drv1 = NULL;
+	atomic_thread_fence_seq_cst();
 
 	free(info->buf, M_KCOV_BUF);
 	free(info, M_KCOV_INFO);
@@ -208,14 +213,11 @@ kcov_mmap(struct cdev *dev, vm_ooffset_t offset, vm_paddr_t *paddr,
     int prot, vm_memattr_t *memattr __unused)
 {
 	struct kcov_info *info;
-	int error;
 
 	if (prot & PROT_EXEC)
 		return (EINVAL);
 
-	error = devfs_get_cdevpriv((void **)&info);
-	if (error)
-		return (error);
+	info = dev->si_drv1;
 
 	if (info->buf == NULL || offset < 0 ||
 	    offset >= info->entries * sizeof(uintptr_t))
@@ -253,9 +255,7 @@ kcov_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag __unused,
 	struct kcov_info *info;
 	int mode, error;
 
-	error = devfs_get_cdevpriv((void **)&info);
-	if (error)
-		return (error);
+	info = dev->si_drv1;
 
 	error = 0;
 
@@ -320,11 +320,13 @@ kcov_init(const void *unused)
 	struct make_dev_args args;
 	struct cdev *dev;
 
+	mtx_init(&kcov_mtx, "kcov", NULL, MTX_DEF);
+
 	make_dev_args_init(&args);
 	args.mda_devsw = &kcov_cdevsw;
 	args.mda_uid = UID_ROOT;
 	args.mda_gid = GID_WHEEL;
-	args.mda_mode = 0660;
+	args.mda_mode = 0600;
 	if (make_dev_s(&args, &dev, "kcov") != 0) {
 		printf("%s", "Failed to create kcov device");
 		return;
