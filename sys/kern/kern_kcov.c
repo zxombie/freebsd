@@ -508,14 +508,16 @@ kcov_init(const void *unused)
 void
 kcov_thread_exit(struct thread *td)
 {
-#if 0
 	struct kcov_info *info;
 
-	if (td->td_kcov_info != NULL) {
-		info = td->td_kcov_info;
-		/* TODO */
+	info = td->td_kcov_info;
+	if (info != NULL) {
+		KASSERT(info->state == KCOV_STATE_RUNNING,
+		    ("kcov_thread_exit: td_kcov_info set but not running"));
+		info->state = KCOV_STATE_READY;
+		atomic_thread_fence_seq_cst();
+		td->td_kcov_info = NULL;
 	}
-#endif
 }
 
 SYSINIT(kcovdev, SI_SUB_DEVFS, SI_ORDER_ANY, kcov_init, NULL);
