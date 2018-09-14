@@ -124,8 +124,6 @@ SYSCTL_UINT(_kern_kcov, OID_AUTO, max_size, CTLFLAG_RW,
     &kcov_max_size, 0,
     "Maximum size of the kcov buffer");
 
-static struct mtx kcov_mtx;
-
 static struct kcov_info *
 get_kinfo(struct thread *td)
 {
@@ -528,8 +526,6 @@ kcov_init(const void *unused)
 {
 	struct make_dev_args args;
 	struct cdev *dev;
-
-	mtx_init(&kcov_mtx, "kcov", NULL, MTX_DEF);
 
 	make_dev_args_init(&args);
 	args.mda_devsw = &kcov_cdevsw;
