@@ -191,6 +191,13 @@
 #define	NUPDPE		(NUPML4E*NPDPEPG)/* number of userland PDP pages */
 #define	NUPDE		(NUPDPE*NPDEPG)	/* number of userland PD entries */
 
+/* NKASANPML4E is the number of PML4 page entries. It is NKPML4E / 8 because
+ * KASAN needs 1 byte of memory for every 8 bytes of Kernel Memory.
+ */
+
+#define NKASANPML4E	1
+#define KASAN_SHADOW_SCALE_SHIFT	3
+
 /*
  * NDMPML4E is the maximum number of PML4 entries that will be
  * used to implement the direct map.  It must be a power of two,
@@ -220,6 +227,8 @@
 
 #define	KPML4BASE	(NPML4EPG-NKPML4E) /* KVM at highest addresses */
 #define	DMPML4I		rounddown(KPML4BASE-NDMPML4E, NDMPML4E) /* Below KVM */
+#define	KASANPML4I	NDMPML4E-NKASANPML4E /* Below DM */
+
 
 #define	KPML4I		(NPML4EPG-1)
 #define	KPDPI		(NPDPEPG-2)	/* kernbase at -2GB */
