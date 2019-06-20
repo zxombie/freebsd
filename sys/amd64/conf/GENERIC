@@ -104,6 +104,7 @@ options 	VERBOSE_SYSINIT=0	# Support debug.verbose_sysinit, off by default
 # Kernel Sanitizers
 #options 	COVERAGE		# Generic kernel coverage. Used by KCOV
 #options 	KCOV			# Kernel Coverage Sanitizer
+options		KASAN
 # Warning: KUBSAN can result in a kernel too large for loader to load
 #options 	KUBSAN			# Kernel Undefined Behavior Sanitizer
 
