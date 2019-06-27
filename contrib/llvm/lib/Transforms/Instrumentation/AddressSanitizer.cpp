@@ -546,6 +546,8 @@ static ShadowMapping getShadowMapping(Triple &TargetTriple, int LongSize,
       Mapping.Offset = kPPC64_ShadowOffset64;
     else if (IsSystemZ)
       Mapping.Offset = kSystemZ_ShadowOffset64;
+    else if (IsFreeBSD && IsKasan)
+      Mapping.Offset = 0xe0001fe000000000; // XXX: This is probably wrong
     else if (IsFreeBSD && !IsMIPS64)
       Mapping.Offset = kFreeBSD_ShadowOffset64;
     else if (IsNetBSD) {
