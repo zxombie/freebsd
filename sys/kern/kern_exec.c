@@ -44,6 +44,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/filedesc.h>
 #include <sys/imgact.h>
 #include <sys/imgact_elf.h>
+#include <sys/kasan.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
@@ -1327,6 +1328,9 @@ exec_alloc_args_kva(void **cookie)
 		mtx_unlock(&exec_args_kva_mtx);
 	}
 	*(struct exec_args_kva **)cookie = argkva;
+#ifdef KASAN
+       kasan_unpoison(argkva->addr, exec_map_entry_size);
+#endif
 	return (argkva->addr);
 }
 

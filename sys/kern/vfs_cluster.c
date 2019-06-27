@@ -37,9 +37,11 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_debug_cluster.h"
+#include "opt_sanitizer.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/kasan.h>
 #include <sys/kernel.h>
 #include <sys/proc.h>
 #include <sys/bio.h>
@@ -561,6 +563,11 @@ clean_sbusy:
 	if (buf_mapped(bp)) {
 		pmap_qenter(trunc_page((vm_offset_t) bp->b_data),
 		    (vm_page_t *)bp->b_pages, bp->b_npages);
+#ifdef KASAN
+		/* XXX: Could we tighten this size? */
+		kasan_unpoison(trunc_page((vm_offset_t)bp->b_data),
+		    bp->b_npages * PAGE_SIZE);
+#endif
 	}
 	return (bp);
 }
@@ -584,6 +591,10 @@ cluster_callback(struct buf *bp)
 		error = bp->b_error;
 
 	if (buf_mapped(bp)) {
+#ifdef KASAN
+		kasan_poison(trunc_page((vm_offset_t)bp->b_data),
+		    bp->b_npages * PAGE_SIZE);
+#endif
 		pmap_qremove(trunc_page((vm_offset_t) bp->b_data),
 		    bp->b_npages);
 	}
@@ -1030,6 +1041,11 @@ cluster_wbuild(struct vnode *vp, long size, daddr_t start_lbn, int len,
 		if (buf_mapped(bp)) {
 			pmap_qenter(trunc_page((vm_offset_t) bp->b_data),
 			    (vm_page_t *)bp->b_pages, bp->b_npages);
+#ifdef KASAN
+			/* XXX: Could we tighten this size? */
+			kasan_unpoison(trunc_page((vm_offset_t)bp->b_data),
+			    bp->b_npages * PAGE_SIZE);
+#endif
 		}
 		if (bp->b_bufsize > bp->b_kvasize)
 			panic(

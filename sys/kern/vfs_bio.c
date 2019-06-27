@@ -88,6 +88,9 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_map.h>
 #include <vm/swap_pager.h>
 
+#include "opt_sanitizer.h"
+#include <sys/kasan.h>
+
 static MALLOC_DEFINE(M_BIOBUF, "biobuf", "BIO buffer");
 
 struct	bio_ops bioops;		/* I/O operation notification */
@@ -1446,6 +1449,10 @@ bpmap_qenter(struct buf *bp)
 	 */
 	bp->b_data = (caddr_t)trunc_page((vm_offset_t)bp->b_data);
 	pmap_qenter((vm_offset_t)bp->b_data, bp->b_pages, bp->b_npages);
+#ifdef KASAN
+	/* XXX: This should be tightened */
+	kasan_unpoison_buf((vm_offset_t)bp->b_data, bp->b_npages * PAGE_SIZE);
+#endif
 	bp->b_data = (caddr_t)((vm_offset_t)bp->b_data |
 	    (vm_offset_t)(bp->b_offset & PAGE_MASK));
 }
@@ -1995,6 +2002,9 @@ bufkva_free(struct buf *bp)
 	if (bp->b_kvasize == 0)
 		return;
 
+#ifdef KASAN
+	kasan_poison((vm_offset_t)bp->b_kvabase, bp->b_kvasize);
+#endif
 	vmem_free(buffer_arena, (vm_offset_t)bp->b_kvabase, bp->b_kvasize);
 	counter_u64_add(bufkvaspace, -bp->b_kvasize);
 	counter_u64_add(buffreekvacnt, 1);
@@ -2891,6 +2901,11 @@ vfs_vmio_iodone(struct buf *bp)
 		BUF_CHECK_MAPPED(bp);
 		pmap_qenter(trunc_page((vm_offset_t)bp->b_data),
 		    bp->b_pages, bp->b_npages);
+#ifdef KASAN
+		/* XXX: Could we tighten this size? */
+		kasan_unpoison_buf(trunc_page((vm_offset_t)bp->b_data),
+		    bp->b_npages * PAGE_SIZE);
+#endif
 	}
 }
 
@@ -2948,6 +2963,10 @@ vfs_vmio_invalidate(struct buf *bp)
 
 	if (buf_mapped(bp)) {
 		BUF_CHECK_MAPPED(bp);
+#ifdef KASAN
+		kasan_poison(trunc_page((vm_offset_t)bp->b_data),
+		    bp->b_npages * PAGE_SIZE);
+#endif
 		pmap_qremove(trunc_page((vm_offset_t)bp->b_data), bp->b_npages);
 	} else
 		BUF_CHECK_UNMAPPED(bp);
@@ -3007,6 +3026,11 @@ vfs_vmio_truncate(struct buf *bp, int desiredpages)
 
 	if (buf_mapped(bp)) {
 		BUF_CHECK_MAPPED(bp);
+#ifdef KASAN
+		kasan_poison((vm_offset_t)trunc_page((vm_offset_t)bp->b_data) +
+		    (desiredpages << PAGE_SHIFT),
+		    (bp->b_npages - desiredpages) * PAGE_SIZE);
+#endif
 		pmap_qremove((vm_offset_t)trunc_page((vm_offset_t)bp->b_data) +
 		    (desiredpages << PAGE_SHIFT), bp->b_npages - desiredpages);
 	} else
@@ -4322,6 +4346,9 @@ biodone(struct bio *bp)
 		start = trunc_page((vm_offset_t)bp->bio_data);
 		end = round_page((vm_offset_t)bp->bio_data + bp->bio_length);
 		bp->bio_data = unmapped_buf;
+#ifdef KASAN
+		kasan_poison(start, end - start);
+#endif
 		pmap_qremove(start, atop(end - start));
 		vmem_free(transient_arena, start, end - start);
 		atomic_add_int(&inflight_transient_maps, -1);
@@ -4514,6 +4541,12 @@ vfs_unbusy_pages(struct buf *bp)
 				BUF_CHECK_MAPPED(bp);
 				pmap_qenter(trunc_page((vm_offset_t)bp->b_data),
 				    bp->b_pages, bp->b_npages);
+#ifdef KASAN
+				/* XXX: Could we tighten this size? */
+				kasan_unpoison_buf(
+				    trunc_page((vm_offset_t)bp->b_data),
+				    bp->b_npages * PAGE_SIZE);
+#endif
 			} else
 				BUF_CHECK_UNMAPPED(bp);
 		}
@@ -4688,6 +4721,10 @@ vfs_busy_pages(struct buf *bp, int clear_modify)
 		BUF_CHECK_MAPPED(bp);
 		pmap_qenter(trunc_page((vm_offset_t)bp->b_data),
 		    bp->b_pages, bp->b_npages);
+#ifdef KASAN
+		kasan_unpoison_buf(trunc_page((vm_offset_t)bp->b_data),
+		    bp->b_npages * PAGE_SIZE);
+#endif
 	}
 }
 
@@ -4891,6 +4928,9 @@ vm_hold_load_pages(struct buf *bp, vm_offset_t from, vm_offset_t to)
 		    VM_ALLOC_WIRED | VM_ALLOC_COUNT((to - pg) >> PAGE_SHIFT) |
 		    VM_ALLOC_WAITOK);
 		pmap_qenter(pg, &p, 1);
+#ifdef KASAN
+		kasan_unpoison_buf(pg, PAGE_SIZE);
+#endif
 		bp->b_pages[index] = p;
 	}
 	bp->b_npages = index;
@@ -4908,8 +4948,12 @@ vm_hold_free_pages(struct buf *bp, int newbsize)
 
 	from = round_page((vm_offset_t)bp->b_data + newbsize);
 	newnpages = (from - trunc_page((vm_offset_t)bp->b_data)) >> PAGE_SHIFT;
-	if (bp->b_npages > newnpages)
+	if (bp->b_npages > newnpages) {
+#ifdef KASAN
+		kasan_poison(from, (bp->b_npages - newnpages) * PAGE_SIZE);
+#endif
 		pmap_qremove(from, bp->b_npages - newnpages);
+	}
 	for (index = newnpages; index < bp->b_npages; index++) {
 		p = bp->b_pages[index];
 		bp->b_pages[index] = NULL;
@@ -4954,8 +4998,13 @@ vmapbuf(struct buf *bp, int mapbuf)
 	if (mapbuf || !unmapped_buf_allowed) {
 		pmap_qenter((vm_offset_t)bp->b_kvabase, bp->b_pages, pidx);
 		bp->b_data = bp->b_kvabase + bp->b_offset;
-	} else
+#ifdef KASAN
+		/* XXX: Could we tighten this size? */
+		kasan_unpoison_buf((vm_offset_t)bp->b_kvabase, bp->b_bufsize);
+#endif
+	} else {
 		bp->b_data = unmapped_buf;
+	}
 	return(0);
 }
 
@@ -4971,8 +5020,12 @@ vunmapbuf(struct buf *bp)
 	int npages;
 
 	npages = bp->b_npages;
-	if (buf_mapped(bp))
+	if (buf_mapped(bp)) {
+#ifdef KASAN
+		kasan_poison(trunc_page((vm_offset_t)bp->b_data), npages + PAGE_SIZE);
+#endif
 		pmap_qremove(trunc_page((vm_offset_t)bp->b_data), npages);
+	}
 	vm_page_unhold_pages(bp->b_pages, npages);
 
 	bp->b_data = unmapped_buf;

@@ -23,6 +23,8 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include "opt_sanitizer.h"
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/malloc.h>
@@ -32,6 +34,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/eventhandler.h>
 #include <sys/sysproto.h>
 #include <sys/filedesc.h>
+#include <sys/kasan.h>
 #include <sys/kernel.h>
 #include <sys/module.h>
 #include <sys/kthread.h>
@@ -1297,6 +1300,11 @@ aio_qbio(struct proc *p, struct kaiocb *job)
 	if (pbuf != NULL) {
 		pmap_qenter((vm_offset_t)pbuf->b_data,
 		    job->pages, job->npages);
+#ifdef KASAN
+		/* XXX: Could we tighten this size? */
+		kasan_unpoison((vm_offset_t)pbuf->b_data,
+		    job->npages * PAGE_SIZE);
+#endif
 		bp->bio_data = pbuf->b_data + poff;
 		atomic_add_int(&num_buf_aio, 1);
 	} else {

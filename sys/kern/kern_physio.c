@@ -22,11 +22,14 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include "opt_sanitizer.h"
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/bio.h>
 #include <sys/buf.h>
 #include <sys/conf.h>
+#include <sys/kasan.h>
 #include <sys/malloc.h>
 #include <sys/proc.h>
 #include <sys/racct.h>
@@ -182,6 +185,11 @@ physio(struct cdev *dev, struct uio *uio, int ioflag)
 				if (pbuf && sa) {
 					pmap_qenter((vm_offset_t)sa,
 					    pages, npages);
+#ifdef KASAN
+                                       /* XXX: Could we tighten this size? */
+                                       kasan_unpoison((vm_offset_t)sa,
+                                           npages * PAGE_SIZE);
+#endif
 					bp->bio_data = sa + poff;
 				} else {
 					bp->bio_ma = pages;

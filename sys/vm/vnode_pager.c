@@ -1041,6 +1041,11 @@ vnode_pager_generic_getpages(struct vnode *vp, vm_page_t *m, int count,
 	} else {
 		bp->b_data = bp->b_kvabase;
 		pmap_qenter((vm_offset_t)bp->b_data, bp->b_pages, bp->b_npages);
+#ifdef KASAN
+		/* XXX: Could we tighten this size? */
+		kasan_unpoison((vm_offset_t)bp->b_data,
+		    bp->b_npages * PAGE_SIZE);
+#endif
 	}
 
 	/* Build a minimal buffer header. */
@@ -1118,6 +1123,11 @@ vnode_pager_generic_getpages_done(struct buf *bp)
 			bp->b_data = bp->b_kvabase;
 			pmap_qenter((vm_offset_t)bp->b_data, bp->b_pages,
 			    bp->b_npages);
+#ifdef KASAN
+			/* XXX: Could we tighten this size? */
+			kasan_unpoison((vm_offset_t)bp->b_data,
+			    bp->b_npages * PAGE_SIZE);
+#endif
 		}
 		bzero(bp->b_data + bp->b_bcount,
 		    PAGE_SIZE * bp->b_npages - bp->b_bcount);

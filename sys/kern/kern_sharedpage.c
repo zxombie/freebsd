@@ -34,11 +34,13 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_vm.h"
+#include "opt_sanitizer.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
+#include <sys/kasan.h>
 #include <sys/malloc.h>
 #include <sys/rwlock.h>
 #include <sys/sysent.h>
@@ -119,6 +121,9 @@ shared_page_init(void *dummy __unused)
 	VM_OBJECT_WUNLOCK(shared_page_obj);
 	addr = kva_alloc(PAGE_SIZE);
 	pmap_qenter(addr, &m, 1);
+#ifdef KASAN
+       kasan_unpoison(addr, PAGE_SIZE);
+#endif
 	shared_page_mapping = (char *)addr;
 }
 

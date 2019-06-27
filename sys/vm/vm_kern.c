@@ -67,6 +67,7 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include "opt_sanitizer.h"
 #include "opt_vm.h"
 
 #include <sys/param.h>
@@ -74,6 +75,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/kernel.h>		/* for ticks and hz */
 #include <sys/domainset.h>
 #include <sys/eventhandler.h>
+#include <sys/kasan.h>
 #include <sys/lock.h>
 #include <sys/proc.h>
 #include <sys/malloc.h>
@@ -185,6 +187,9 @@ kmem_alloc_attr_domain(int domain, vm_size_t size, int flags, vm_paddr_t low,
 	vm_page_t m;
 	int pflags, tries;
 	vm_prot_t prot;
+#ifdef KASAN
+	vm_size_t origsize = size;
+#endif
 
 	size = round_page(size);
 	vmem = vm_dom[domain].vmd_kernel_arena;
@@ -226,6 +231,10 @@ retry:
 		    prot | PMAP_ENTER_WIRED, 0);
 	}
 	VM_OBJECT_WUNLOCK(object);
+#ifdef KASAN
+	kasan_unpoison(addr, origsize);
+#endif
+
 	return (addr);
 }
 
@@ -276,6 +285,9 @@ kmem_alloc_contig_domain(int domain, vm_size_t size, int flags, vm_paddr_t low,
 	vm_page_t end_m, m;
 	u_long npages;
 	int pflags, tries;
+#ifdef KASAN
+	vm_size_t origsize = size;
+#endif
  
 	size = round_page(size);
 	vmem = vm_dom[domain].vmd_kernel_arena;
@@ -319,6 +331,9 @@ retry:
 		tmp += PAGE_SIZE;
 	}
 	VM_OBJECT_WUNLOCK(object);
+#ifdef KASAN
+	kasan_unpoison(addr, origsize);
+#endif
 	return (addr);
 }
 
@@ -505,6 +520,9 @@ retry:
 #endif
 	}
 	VM_OBJECT_WUNLOCK(object);
+#ifdef KASAN
+	kasan_unpoison(addr, size);
+#endif
 
 	return (KERN_SUCCESS);
 }
@@ -570,6 +588,9 @@ _kmem_unback(vm_object_t object, vm_offset_t addr, vm_size_t size)
 
 	if (size == 0)
 		return (NULL);
+#ifdef KASAN
+	kasan_poison(addr, size);
+#endif
 	pmap_remove(kernel_pmap, addr, addr + size);
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
 	end = offset + size;

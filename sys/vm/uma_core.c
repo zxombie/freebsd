@@ -54,6 +54,7 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_ddb.h"
 #include "opt_param.h"
+#include "opt_sanitizer.h"
 #include "opt_vm.h"
 
 #include <sys/param.h>
@@ -66,6 +67,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/limits.h>
 #include <sys/queue.h>
 #include <sys/malloc.h>
+#include <sys/kasan.h>
 #include <sys/ktr.h>
 #include <sys/lock.h>
 #include <sys/sysctl.h>
@@ -1210,6 +1212,10 @@ startup_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *pflag,
 	bootmem += pages * PAGE_SIZE;
 	*pflag = UMA_SLAB_BOOT;
 
+#ifdef KASAN
+       kasan_unpoison((vm_offset_t)mem, bytes);
+#endif
+
 	return (mem);
 }
 
@@ -1278,6 +1284,10 @@ pcpu_page_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *pflag,
 		pmap_qenter(zkva, &p, 1);
 		zkva += PAGE_SIZE;
 	}
+
+#ifdef KASAN
+       kasan_unpoison(retkva, bytes);
+#endif
 	return ((void*)addr);
 fail:
 	TAILQ_FOREACH_SAFE(p, &alloctail, listq, p_next) {
@@ -2370,6 +2380,9 @@ uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 	if (memguard_cmp_zone(zone)) {
 		item = memguard_alloc(zone->uz_size, flags);
 		if (item != NULL) {
+#ifdef KASAN
+                       kasan_unpoison((vm_offset_t)item, zone->uz_size);
+#endif
 			if (zone->uz_init != NULL &&
 			    zone->uz_init(item, zone->uz_size, flags) != 0)
 				return (NULL);
@@ -2427,6 +2440,9 @@ zalloc_start:
 #ifdef INVARIANTS
 		if (!skipdbg)
 			uma_dbg_alloc(zone, NULL, item);
+#endif
+#ifdef KASAN
+               //kasan_unpoison((vm_offset_t)item, zone->uz_size);
 #endif
 		if (flags & M_ZERO)
 			uma_zero_item(item, zone);
@@ -2949,6 +2965,10 @@ zone_alloc_item_locked(uma_zone_t zone, void *udata, int domain, int flags)
 	if (zone->uz_import(zone->uz_arg, &item, 1, domain, flags) != 1)
 		goto fail;
 
+#ifdef KASAN
+       kasan_unpoison((vm_offset_t)item, zone->uz_size);
+#endif
+
 #ifdef INVARIANTS
 	skipdbg = uma_dbg_zskip(zone, item);
 #endif
@@ -3278,7 +3298,13 @@ zone_free_item(uma_zone_t zone, void *item, void *udata, enum zfreeskip skip)
 {
 #ifdef INVARIANTS
 	bool skipdbg;
+#endif
 
+#ifdef KASAN
+       kasan_poison((vm_offset_t)item, zone->uz_size);
+#endif
+
+#ifdef INVARIANTS
 	skipdbg = uma_dbg_zskip(zone, item);
 	if (skip == SKIP_NONE && !skipdbg) {
 		if (zone->uz_flags & UMA_ZONE_MALLOC)
