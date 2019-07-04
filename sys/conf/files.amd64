@@ -142,6 +142,8 @@ amd64/amd64/gdb_machdep.c	optional	gdb
 amd64/amd64/in_cksum.c		optional	inet | inet6
 amd64/amd64/initcpu.c		standard
 amd64/amd64/io.c		optional	io
+arm64/arm64/kasan_machdep.c    optional        kasan   \
+       compile-with "${CC} -c ${CFLAGS:N-fsanitize=kernel-address} ${WERROR} ${PROF} ${.IMPSRC}"
 amd64/amd64/locore.S		standard	no-obj
 amd64/amd64/xen-locore.S	optional	xenhvm
 amd64/amd64/machdep.c		standard

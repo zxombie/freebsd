@@ -1286,7 +1286,7 @@ pcpu_page_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *pflag,
 	}
 
 #ifdef KASAN
-       kasan_unpoison(retkva, bytes);
+       kasan_unpoison(addr, bytes);
 #endif
 	return ((void*)addr);
 fail:
