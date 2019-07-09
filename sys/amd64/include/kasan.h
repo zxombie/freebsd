@@ -34,8 +34,8 @@
 #define	_MACHINE_KASAN_H_
 
 #include <machine/vmparam.h>
+#include <vm/vm.h>
 #include <vm/pmap.h>
-#include <sys/types.h>
 
 static inline bool
 kasan_ignore_addr(vm_offset_t addr, vm_size_t size)

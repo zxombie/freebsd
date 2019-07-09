@@ -2700,7 +2700,7 @@ outb_(u_short port, u_char data)
 }
 
 #endif /* KDB */
-
+/*
 #undef memset
 #undef memmove
 #undef memcpy
@@ -2745,3 +2745,5 @@ DEFINE_IFUNC(, void , pagezero, (void *))
 	return ((cpu_stdext_feature & CPUID_STDEXT_ERMS) != 0 ?
 	    pagezero_erms : pagezero_std);
 }
+
+*/

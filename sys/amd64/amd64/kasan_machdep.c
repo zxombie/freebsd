@@ -42,6 +42,12 @@
 #include <vm/vm_param.h>
 #include <vm/vm_page.h>
 
+
+/* Sanity check the KASAN region has enough virtual address space */
+CTASSERT((KASAN_MAX_ADDRESS - KASAN_MIN_ADDRESS) ==
+    (VM_MAX_KERNEL_ADDRESS - VM_MIN_KERNEL_ADDRESS) >> 3);
+
+	
 void
 kasan_shadow_map(vm_offset_t addr, vm_size_t size)
 {
@@ -62,9 +68,12 @@ kasan_shadow_map(vm_offset_t addr, vm_size_t size)
 	if (end > KASAN_MAX_ADDRESS)
 		end = KASAN_MAX_ADDRESS;
 	while (start < end) {
+		pdpe = pmap_pdpe(kernel_pmap, kernel_vm_end); //l0
+		pde = pmap_pdpe_to_pde(pdpe, kernel_vm_end); //l2
+
 		if (pmap_kextract(start) != 0)
 			goto next;
-		idx = (start - KASAN_MIN_ADDRESS) >> L2_SHIFT;
+		idx = pmap_pde_pindex(start - KASAN_MIN_ADDRESS);
 		KASSERT(idx < nitems(kasan_l2),
 		    ("kasan_grow_shadow_map: L2 Index out of range (%d >= %zu)",
 		    idx, nitems(kasan_l2)));

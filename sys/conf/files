@@ -3729,7 +3729,7 @@ kern/init_sysent.c		standard
 kern/ksched.c			optional _kposix_priority_scheduling
 kern/kern_acct.c		standard
 kern/kern_alq.c			optional alq
-kern/kern_asan.c               optional kasan  \
+kern/kern_asan.c                optional kasan  \
        compile-with "${CC} -c ${CFLAGS:N-fsanitize=kernel-address} ${WERROR} ${PROF} ${.IMPSRC}"
 kern/kern_clock.c		standard
 kern/kern_condvar.c		standard
