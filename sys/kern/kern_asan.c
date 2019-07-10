@@ -348,7 +348,6 @@ kasan_init(void)
 {
 
 	kasan_reporting = false;
-	kasan_arch_init();
 	kasan_ready = 1;
 	printf("KASAN ready\n");
 }

@@ -49,7 +49,6 @@ void kasan_unpoison_buf(vm_offset_t, vm_size_t);
 void kasan_init(void);
 vm_offset_t kasan_kmem_to_shadow(vm_offset_t);
 vm_offset_t kasan_shadow_to_kmem(vm_offset_t);
-void kasan_arch_init(void);
 void kasan_shadow_map(vm_offset_t, vm_size_t);
 
 #endif /* _KERNEL */

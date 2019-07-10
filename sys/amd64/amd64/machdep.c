@@ -2700,24 +2700,38 @@ outb_(u_short port, u_char data)
 }
 
 #endif /* KDB */
-/*
+
 #undef memset
 #undef memmove
 #undef memcpy
 
 void	*memset_std(void *buf, int c, size_t len);
 void	*memset_erms(void *buf, int c, size_t len);
+
+void *
+(memset)(void * _Nonnull buf, int c, size_t len)
+{
+    return memset_std(buf, c, len);
+}
+/*
 DEFINE_IFUNC(, void *, memset, (void *, int, size_t))
 {
 
 	return ((cpu_stdext_feature & CPUID_STDEXT_ERMS) != 0 ?
 	    memset_erms : memset_std);
 }
-
+*/
 void    *memmove_std(void * _Nonnull dst, const void * _Nonnull src,
 	    size_t len);
 void    *memmove_erms(void * _Nonnull dst, const void * _Nonnull src,
 	    size_t len);
+
+void *
+(memmove)(void * _Nonnull dst, const void * _Nonnull src, size_t len)
+{
+    return memmove_std(dst, src, len);
+}
+/*
 DEFINE_IFUNC(, void *, memmove, (void * _Nonnull, const void * _Nonnull,
     size_t))
 {
@@ -2725,25 +2739,41 @@ DEFINE_IFUNC(, void *, memmove, (void * _Nonnull, const void * _Nonnull,
 	return ((cpu_stdext_feature & CPUID_STDEXT_ERMS) != 0 ?
 	    memmove_erms : memmove_std);
 }
+*/
 
 void    *memcpy_std(void * _Nonnull dst, const void * _Nonnull src,
 	    size_t len);
 void    *memcpy_erms(void * _Nonnull dst, const void * _Nonnull src,
 	    size_t len);
+
+void *
+(memcpy)(void * _Nonnull dst, const void * _Nonnull src, size_t len)
+{
+    return memcpy_std(dst, src, len);
+}
+/*
 DEFINE_IFUNC(, void *, memcpy, (void * _Nonnull, const void * _Nonnull,size_t))
 {
 
 	return ((cpu_stdext_feature & CPUID_STDEXT_ERMS) != 0 ?
 	    memcpy_erms : memcpy_std);
 }
-
+*/
 void	pagezero_std(void *addr);
 void	pagezero_erms(void *addr);
+
+
+void
+(pagezero)(void * addr)
+{
+    return pagezero_std(addr);
+}
+
+/*
 DEFINE_IFUNC(, void , pagezero, (void *))
 {
 
 	return ((cpu_stdext_feature & CPUID_STDEXT_ERMS) != 0 ?
 	    pagezero_erms : pagezero_std);
 }
-
 */
