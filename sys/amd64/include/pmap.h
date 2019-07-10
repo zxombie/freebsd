@@ -478,6 +478,8 @@ int	pmap_pkru_set(pmap_t pmap, vm_offset_t sva, vm_offset_t eva,
 	    u_int keyidx, int flags);
 void	pmap_thread_init_invl_gen(struct thread *td);
 int	pmap_vmspace_copy(pmap_t dst_pmap, pmap_t src_pmap);
+
+pdp_entry_t* pmap_pdpe(pmap_t pmap, vm_offset_t va);
 #endif /* _KERNEL */
 
 /* Return various clipped indexes for a given VA */

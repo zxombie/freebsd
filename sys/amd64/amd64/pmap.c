@@ -1139,7 +1139,7 @@ pmap_pml4e_to_pdpe(pml4_entry_t *pml4e, vm_offset_t va)
 }
 
 /* Return a pointer to the PDP slot that corresponds to a VA */
-static __inline pdp_entry_t *
+__inline pdp_entry_t *
 pmap_pdpe(pmap_t pmap, vm_offset_t va)
 {
 	pml4_entry_t *pml4e;
