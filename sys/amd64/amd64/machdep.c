@@ -1891,6 +1891,10 @@ hammer_time(u_int64_t modulep, u_int64_t physfree)
 
 	TSEXIT();
 
+#ifdef KASAN
+	kasan_init();
+#endif
+
 	/* Location of kernel stack for locore */
 	return ((u_int64_t)thread0.td_pcb);
 }
