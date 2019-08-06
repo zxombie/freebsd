@@ -42,15 +42,15 @@
 #include <vm/vm_param.h>
 #include <vm/vm_page.h>
 
+static pd_entry_t kasan_pd[NPDEPG] __aligned(PAGE_SIZE);
+
 void
 kasan_shadow_map(vm_offset_t addr, vm_size_t size)
 {
 	vm_offset_t start, end;
-	pd_entry_t *pde = NULL, newpdir;
-	pdp_entry_t *pdpe;
 	vm_paddr_t paddr;
 	vm_page_t nkpg;
-	pmap_t kpm = kernel_pmap;
+	int idx;
 
 	KASSERT(addr >= VM_MIN_KERNEL_ADDRESS,
 	    ("kasan_grow_shadow_map: Invalid userspace address %lx", addr));
@@ -63,22 +63,25 @@ kasan_shadow_map(vm_offset_t addr, vm_size_t size)
 	end = kasan_kmem_to_shadow(addr + size);
 	if (end > KASAN_MAX_ADDRESS)
 		end = KASAN_MAX_ADDRESS;
+
 	while (start < end) {
-		pdpe = pmap_pdpe(kpm, start);
-		if ((*pdpe & X86_PG_V) == 0) {
-			/* We need a new PDP entry */
+		if (pmap_kextract(start) != 0)
+		    goto next;
+		idx = (start - KASAN_MIN_ADDRESS) >> PDRSHIFT;
+		KASSERT(idx < nitems(kasan_pd),
+		    ("kasan_grow_shadow_map: PD table Index out of range (%d >= %zu)",
+		    idx, nitems(kasan_pd)));
+		if (kasan_pd[idx] == 0) {
 			nkpg = vm_page_alloc(NULL, 0,
-			    VM_ALLOC_INTERRUPT | VM_ALLOC_NOOBJ |
-			    VM_ALLOC_WIRED | VM_ALLOC_ZERO);
+			VM_ALLOC_INTERRUPT | VM_ALLOC_NOOBJ |
+			VM_ALLOC_WIRED | VM_ALLOC_ZERO);
 			if (nkpg == NULL)
-				panic("kasan_grow_shadow_map: "
-				    "no memory to grow PDPE shadow map");
+			panic("kasan_grow_shadow_map: "
+			    "no memory to grow PD shadow map");
 			if ((nkpg->flags & PG_ZERO) == 0)
-				pmap_zero_page(nkpg);
+			pmap_zero_page(nkpg);
 			paddr = VM_PAGE_TO_PHYS(nkpg);
-			*pdpe = (pdp_entry_t)(paddr | X86_PG_V | X86_PG_RW |
-			    X86_PG_A | X86_PG_M);
-			continue; /* try again */
+			kasan_pd[idx] = paddr | X86_PG_M | X86_PG_A | X86_PG_RW | X86_PG_V;
 		}
 
 		nkpg = vm_page_alloc(NULL, 0,
@@ -86,11 +89,14 @@ kasan_shadow_map(vm_offset_t addr, vm_size_t size)
 		    VM_ALLOC_ZERO);
 		if (nkpg == NULL)
 			panic("kasan_grow_shadow_map: "
-			    "no memory to grow PDE shadow map");
+				"no memory to grow PT table shadow map");
 		if ((nkpg->flags & PG_ZERO) == 0)
 			pmap_zero_page(nkpg);
 		paddr = VM_PAGE_TO_PHYS(nkpg);
-		newpdir = paddr | X86_PG_V | X86_PG_RW | X86_PG_A | X86_PG_M;
-		pde_store(pde, newpdir);
+		pmap_kenter(start, paddr);
+
+		__builtin_memset((void *)start, 0xff, PAGE_SIZE);
+next:
+	start = (start + PAGE_SIZE) & ~ PAGE_MASK;
 	}
 }
