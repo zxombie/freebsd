@@ -7688,6 +7688,9 @@ pmap_mapdev_internal(vm_paddr_t pa, vm_size_t size, int mode, bool noflush)
 	vm_offset_t va, offset;
 	vm_size_t tmpsize;
 	int i;
+#ifdef KASAN
+	vm_size_t origsize = size;
+#endif
 
 	offset = pa & PAGE_MASK;
 	size = round_page(offset + size);
@@ -7740,6 +7743,19 @@ pmap_mapdev_internal(vm_paddr_t pa, vm_size_t size, int mode, bool noflush)
 	pmap_invalidate_range(kernel_pmap, va, va + tmpsize);
 	if (!noflush)
 		pmap_invalidate_cache_range(va, va + tmpsize);
+
+#ifdef KASAN
+{
+	vm_offset_t addr;
+
+	addr = va + offset;
+	origsize += addr & KASAN_SHADOW_MASK;
+	addr -= addr & KASAN_SHADOW_MASK;
+
+	kasan_unpoison(va + offset, origsize);
+}
+#endif
+
 	return ((void *)(va + offset));
 }
 
