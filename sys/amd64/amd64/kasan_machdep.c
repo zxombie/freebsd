@@ -42,7 +42,7 @@
 #include <vm/vm_param.h>
 #include <vm/vm_page.h>
 
-static pd_entry_t kasan_pd[NPDEPG] __aligned(PAGE_SIZE);
+extern u_int64_t KASANPDphys;
 
 void
 kasan_shadow_map(vm_offset_t addr, vm_size_t size)
@@ -50,6 +50,8 @@ kasan_shadow_map(vm_offset_t addr, vm_size_t size)
 	vm_offset_t start, end;
 	vm_paddr_t paddr;
 	vm_page_t nkpg;
+	pd_entry_t *pde;
+	pt_entry_t *pte;
 	int idx;
 
 	KASSERT(addr >= VM_MIN_KERNEL_ADDRESS,
@@ -65,24 +67,25 @@ kasan_shadow_map(vm_offset_t addr, vm_size_t size)
 		end = KASAN_MAX_ADDRESS;
 
 	while (start < end) {
-		if (pmap_kextract(start) != 0)
-		    goto next;
 		idx = (start - KASAN_MIN_ADDRESS) >> PDRSHIFT;
-		KASSERT(idx < nitems(kasan_pd),
-		    ("kasan_grow_shadow_map: PD table Index out of range (%d >= %zu)",
-		    idx, nitems(kasan_pd)));
-		if (kasan_pd[idx] == 0) {
+		pde = (pd_entry_t *)PHYS_TO_DMAP(KASANPDphys);
+		if (pde[idx] == 0) {
 			nkpg = vm_page_alloc(NULL, 0,
-			VM_ALLOC_INTERRUPT | VM_ALLOC_NOOBJ |
-			VM_ALLOC_WIRED | VM_ALLOC_ZERO);
+			    VM_ALLOC_INTERRUPT | VM_ALLOC_NOOBJ |
+			    VM_ALLOC_WIRED | VM_ALLOC_ZERO);
 			if (nkpg == NULL)
-			panic("kasan_grow_shadow_map: "
-			    "no memory to grow PD shadow map");
+				panic("kasan_grow_shadow_map: "
+				    "no memory to grow PD shadow map");
 			if ((nkpg->flags & PG_ZERO) == 0)
-			pmap_zero_page(nkpg);
+				pmap_zero_page(nkpg);
 			paddr = VM_PAGE_TO_PHYS(nkpg);
-			kasan_pd[idx] = paddr | X86_PG_M | X86_PG_A | X86_PG_RW | X86_PG_V;
+			pde[idx] = paddr | X86_PG_RW | X86_PG_V;
 		}
+
+		pte = (pt_entry_t *)PHYS_TO_DMAP(pde[idx] & PG_FRAME);
+		idx = pmap_pte_index(start);
+		if (pte[idx] != 0)
+			continue;
 
 		nkpg = vm_page_alloc(NULL, 0,
 		    VM_ALLOC_INTERRUPT | VM_ALLOC_NOOBJ | VM_ALLOC_WIRED |
@@ -93,10 +96,9 @@ kasan_shadow_map(vm_offset_t addr, vm_size_t size)
 		if ((nkpg->flags & PG_ZERO) == 0)
 			pmap_zero_page(nkpg);
 		paddr = VM_PAGE_TO_PHYS(nkpg);
-		pmap_kenter(start, paddr);
+		pte[idx] = paddr | X86_PG_RW | X86_PG_V;
 
 		__builtin_memset((void *)start, 0xff, PAGE_SIZE);
-next:
-	start = (start + PAGE_SIZE) & ~ PAGE_MASK;
+		start = (start + PAGE_SIZE) & ~ PAGE_MASK;
 	}
 }

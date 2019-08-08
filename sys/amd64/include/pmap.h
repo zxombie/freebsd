@@ -227,7 +227,7 @@
 
 #define	KPML4BASE	(NPML4EPG-NKPML4E) /* KVM at highest addresses */
 #define	DMPML4I		rounddown(KPML4BASE-NDMPML4E, NDMPML4E) /* Below KVM */
-#define	KASANPML4I	NDMPML4E-NKASANPML4E /* Below DM */
+#define	KASANPML4I	(DMPML4I-NKASANPML4E) /* Below DM */
 
 
 #define	KPML4I		(NPML4EPG-1)

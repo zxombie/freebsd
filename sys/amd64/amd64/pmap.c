@@ -382,8 +382,8 @@ u_int64_t		KPDPphys;	/* phys addr of kernel level 3 */
 u_int64_t		KPML4phys;	/* phys addr of kernel level 4 */
 
 static u_int64_t	KASANPTphys;	/* phys addr of kasan level 1 */
-static u_int64_t	KASANPDphys;	/* phys addr of kasan level 2 */
-u_int64_t		KASANPDPphys;	/* phys addr of kasan level 3 */
+u_int64_t		KASANPDphys;	/* phys addr of kasan level 2 */
+static u_int64_t	KASANPDPphys;	/* phys addr of kasan level 3 */
 
 
 static u_int64_t	DMPDphys;	/* phys addr of direct mapped level 2 */
@@ -1341,6 +1341,8 @@ bootaddr_rwx(vm_paddr_t pa)
 	return (pg_nx);
 }
 
+void *memset_std(void *buf, int c, size_t len);
+
 static void
 create_pagetables(vm_paddr_t *firstaddr)
 {
@@ -1410,7 +1412,8 @@ create_pagetables(vm_paddr_t *firstaddr)
 
 	/* Create KASAN shadow map  */
 	nkasanpdp = NKASANPML4E; //PDP
-	nkasanpd = nkpdpe >> KASAN_SHADOW_SCALE_SHIFT; //PD
+	/* Andrew: Should be enough for KVA */
+	nkasanpd = 256; //nkpdpe >> KASAN_SHADOW_SCALE_SHIFT; //PD
 	nkasanpt = nkpt >> KASAN_SHADOW_SCALE_SHIFT; //PT
 
 	KASANPDPphys = allocpages(firstaddr, nkasanpdp);
@@ -1430,6 +1433,8 @@ create_pagetables(vm_paddr_t *firstaddr)
 	kasan_pd_p = (pd_entry_t *)KASANPDphys;
 	for (i = 0; i < nkasanpt; i++)
 		kasan_pd_p[i] = (KASANPTphys + ptoa(i)) | X86_PG_RW | X86_PG_V;
+
+	memset_std((void *)KASANPTphys, 0, nkasanpt * PAGE_SIZE);
 
 	/*
 	 * Map from physical address zero to the end of loader preallocated
@@ -1456,9 +1461,9 @@ create_pagetables(vm_paddr_t *firstaddr)
 
 
 	/* I have to check if KPML4I - KPML4BASE should be changed. Also KPDPI */
-	kasan_pdp_p = (pdp_entry_t *)(KASANPDPphys + ptoa(KPML4I - KPML4BASE));
+	kasan_pdp_p = (pdp_entry_t *)(KASANPDPphys);
 	for (i = 0; i < nkasanpd; i++)
-		kasan_pdp_p[i + KPDPI] = (KASANPDphys + ptoa(i)) | X86_PG_RW | X86_PG_V;
+		kasan_pdp_p[i] = (KASANPDphys + ptoa(i)) | X86_PG_RW | X86_PG_V;
 
 	/*
 	 * Now, set up the direct map region using 2MB and/or 1GB pages.  If
@@ -1521,7 +1526,7 @@ create_pagetables(vm_paddr_t *firstaddr)
 	}
 
 	/* Connect KASAN slots up to PML4 */
-	p4_p[KASANPML4I] = KPDPphys;
+	p4_p[KASANPML4I] = KASANPDPphys;
 	p4_p[KASANPML4I] |= X86_PG_RW | X86_PG_V;
 }
 
