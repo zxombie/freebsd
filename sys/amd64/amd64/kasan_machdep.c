@@ -96,7 +96,7 @@ kasan_shadow_map(vm_offset_t addr, vm_size_t size)
 		if ((nkpg->flags & PG_ZERO) == 0)
 			pmap_zero_page(nkpg);
 		paddr = VM_PAGE_TO_PHYS(nkpg);
-		pte[idx] = paddr | X86_PG_RW | X86_PG_V;
+		pte[idx] = paddr | X86_PG_RW | X86_PG_V | X86_PG_G;
 
 		__builtin_memset((void *)start, 0xff, PAGE_SIZE);
 		start = (start + PAGE_SIZE) & ~ PAGE_MASK;

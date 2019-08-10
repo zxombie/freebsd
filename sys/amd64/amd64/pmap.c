@@ -3349,6 +3349,8 @@ pmap_pinit_pml4(vm_page_t pml4pg)
 	/* install large map entries if configured */
 	for (i = 0; i < lm_ents; i++)
 		pm_pml4[LMSPML4I + i] = kernel_pmap->pm_pml4[LMSPML4I + i];
+	
+	pm_pml4[KASANPML4I] = KASANPDPphys | X86_PG_RW | X86_PG_V;
 }
 
 static void
@@ -3701,6 +3703,8 @@ pmap_release(pmap_t pmap)
 	pmap->pm_pml4[PML4PML4I] = 0;	/* Recursive Mapping */
 	for (i = 0; i < lm_ents; i++)	/* Large Map */
 		pmap->pm_pml4[LMSPML4I + i] = 0;
+
+	pmap->pm_pml4[KASANPML4I] = 0; /* KASAN */
 
 	vm_page_unwire_noq(m);
 	vm_page_free_zero(m);
