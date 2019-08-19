@@ -378,6 +378,10 @@ kasan_poison(vm_offset_t addr, vm_size_t size)
 	for (i = 0; i < size; i += 8) {
 		*shadow = 0xff;
 		shadow++;
+		if (i + 8 >= size) {
+			*shadow = (1UL << (size - i)) - 1;
+            break;
+		}
 	}
 }
 
@@ -413,6 +417,11 @@ kasan_unpoison(vm_offset_t addr, vm_size_t size)
 		    addr + i, *shadow));
 		*shadow = 0;
 		shadow++;
+		if (i + 8 >= size) {
+			*shadow -= 1UL << (size - i) - 1;
+			break;
+		}
+
 	}
 }
 
