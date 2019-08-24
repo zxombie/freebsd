@@ -456,7 +456,52 @@ kasan_unpoison_buf(vm_offset_t addr, vm_size_t size)
 		shadow++;
 	}
 }
+o
+void
+kasan_add_redzone(size_t *size)
+{
+    *size = roundup(*size, KASAN_SHADOW_SCALE_SIZE);
+    *size += KASAN_SHADOW_SCALE_SIZE;
+}
 
+
+/*
+ * In an area of size 'sz_with_redz', mark the 'size' first bytes as valid,
+ * and the rest as invalid. There are generally two use cases:
+ *
+ *  o kasan_mark(addr, origsize, size, code), with origsize < size. This marks
+ *    the redzone at the end of the buffer as invalid.
+ *
+ *  o kasan_mark(addr, size, size, 0). This marks the entire buffer as valid.
+ */
+void
+kasan_mark(const void *addr, size_t size, size_t sz_with_redz, uint8_t code)
+{
+    size_t i, n, redz;
+    int8_t *shad;
+
+    KASSERT((vaddr_t)addr % KASAN_SHADOW_SCALE_SIZE == 0);
+    redz = sz_with_redz - roundup(size, KASAN_SHADOW_SCALE_SIZE);
+    KASSERT(redz % KASAN_SHADOW_SCALE_SIZE == 0);
+    shad = kasan_kmem_to_shadow(addr);
+
+    /* Chunks of 8 bytes, valid. */
+    n = size / KASAN_SHADOW_SCALE_SIZE;
+    for (i = 0; i < n; i++) {
+        *shad++ = 0;
+    }
+
+    /* Possibly one chunk, mid. */
+    if ((size & KASAN_SHADOW_MASK) != 0) {
+        *shad++ = (size & KASAN_SHADOW_MASK);
+    }
+
+    /* Chunks of 8 bytes, invalid. */
+    n = redz / KASAN_SHADOW_SCALE_SIZE;
+    for (i = 0; i < n; i++) {
+        *shad++ = code;
+    }
+}
 /*
  * This might be useful for testing.
  */
