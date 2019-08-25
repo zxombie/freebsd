@@ -44,6 +44,8 @@ bool kasan_addr_valid(vm_offset_t);
 void kasan_poison(vm_offset_t, vm_size_t);
 void kasan_unpoison(vm_offset_t, vm_size_t);
 void kasan_unpoison_buf(vm_offset_t, vm_size_t);
+void kasan_add_redzone(vm_size_t *size);
+void kasan_mark(vm_offset_t, vm_size_t, vm_size_t, uint8_t);
 
 /* Used internally by KASAN */
 void kasan_init(void);
