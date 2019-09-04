@@ -418,7 +418,7 @@ kasan_unpoison(vm_offset_t addr, vm_size_t size)
 		*shadow = 0;
 		shadow++;
 		if (i + 8 >= size) {
-			*shadow -= 1UL << (size - i) - 1;
+			*shadow -= 1UL << ((size - i) - 1);
 			break;
 		}
 
