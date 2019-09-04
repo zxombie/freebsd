@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2018, 2019 Andrew Turner
+ * Copyright (c) 2019 Andrew Turner
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -30,75 +30,87 @@
  * SUCH DAMAGE.
  */
 
-#include "opt_sanitizer.h"
+#ifndef _MACHINE_ASAN_H_
+#define	_MACHINE_ASAN_H_
 
-#include <sys/cdefs.h>
-#include <sys/types.h>
-#include <sys/kasan.h>
-#include <sys/systm.h>
+#ifndef KASAN_SHADOW_SCALE_SHIFT
+#error "Only include this from kern/subr_asan.c"
+#endif
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
 #include <vm/vm_param.h>
 #include <vm/vm_page.h>
+#include <machine/vmparam.h>
+
+static inline int8_t *
+kasan_md_addr_to_shad(const void *addr)
+{
+
+	return ((int8_t *)(((vm_offset_t)addr - VM_MIN_KERNEL_ADDRESS) >>
+	    KASAN_SHADOW_SCALE_SHIFT) + KASAN_MIN_ADDRESS);
+}
+
+static inline bool
+kasan_md_unsupported(vm_offset_t addr)
+{
+
+	/* Ignore these for now */
+	if (addr >= KERNBASE)
+		return (true);
+
+	return ((addr < VM_MIN_KERNEL_ADDRESS) ||
+	    (addr >= VM_MAX_KERNEL_ADDRESS));
+}
+
+static inline void
+kasan_md_init(void)
+{
+}
 
 extern u_int64_t KASANPDphys;
 
-void
-kasan_shadow_map(vm_offset_t addr, vm_size_t size)
+static inline void
+kasan_md_shadow_map_page(vm_offset_t va)
 {
-	vm_offset_t start, end;
 	vm_paddr_t paddr;
 	vm_page_t nkpg;
 	pd_entry_t *pde;
 	pt_entry_t *pte;
 	int idx;
 
-	KASSERT(addr >= VM_MIN_KERNEL_ADDRESS,
-	    ("kasan_grow_shadow_map: Invalid userspace address %lx", addr));
-	KASSERT(addr < VM_MAX_KERNEL_ADDRESS,
-	    ("kasan_grow_shadow_map: Invalid address %lx", addr));
-
-	start = kasan_kmem_to_shadow(addr);
-	KASSERT(start < KASAN_MAX_ADDRESS,
-	    ("kasan_grow_shadow_map: Bad start address found: %lx", start));
-	end = kasan_kmem_to_shadow(addr + size);
-	if (end > KASAN_MAX_ADDRESS)
-		end = KASAN_MAX_ADDRESS;
-
-	while (start < end) {
-		idx = (start - KASAN_MIN_ADDRESS) >> PDRSHIFT;
-		pde = (pd_entry_t *)PHYS_TO_DMAP(KASANPDphys);
-		if (pde[idx] == 0) {
-			nkpg = vm_page_alloc(NULL, 0,
-			    VM_ALLOC_INTERRUPT | VM_ALLOC_NOOBJ |
-			    VM_ALLOC_WIRED | VM_ALLOC_ZERO);
-			if (nkpg == NULL)
-				panic("kasan_grow_shadow_map: "
-				    "no memory to grow PD shadow map");
-			if ((nkpg->flags & PG_ZERO) == 0)
-				pmap_zero_page(nkpg);
-			paddr = VM_PAGE_TO_PHYS(nkpg);
-			pde[idx] = paddr | X86_PG_RW | X86_PG_V;
-		}
-
-		pte = (pt_entry_t *)PHYS_TO_DMAP(pde[idx] & PG_FRAME);
-		idx = pmap_pte_index(start);
-		if (pte[idx] != 0)
-			continue;
-
+	idx = (va - KASAN_MIN_ADDRESS) >> PDRSHIFT;
+	pde = (pd_entry_t *)PHYS_TO_DMAP(KASANPDphys);
+	if (pde[idx] == 0) {
 		nkpg = vm_page_alloc(NULL, 0,
-		    VM_ALLOC_INTERRUPT | VM_ALLOC_NOOBJ | VM_ALLOC_WIRED |
-		    VM_ALLOC_ZERO);
+		    VM_ALLOC_INTERRUPT | VM_ALLOC_NOOBJ |
+		    VM_ALLOC_WIRED | VM_ALLOC_ZERO);
 		if (nkpg == NULL)
 			panic("kasan_grow_shadow_map: "
-				"no memory to grow PT table shadow map");
+			    "no memory to grow PD shadow map");
 		if ((nkpg->flags & PG_ZERO) == 0)
 			pmap_zero_page(nkpg);
 		paddr = VM_PAGE_TO_PHYS(nkpg);
-		pte[idx] = paddr | X86_PG_RW | X86_PG_V | X86_PG_G;
-
-		__builtin_memset((void *)start, 0xff, PAGE_SIZE);
-		start = (start + PAGE_SIZE) & ~ PAGE_MASK;
+		pde[idx] = paddr | X86_PG_RW | X86_PG_V;
 	}
+
+	pte = (pt_entry_t *)PHYS_TO_DMAP(pde[idx] & PG_FRAME);
+	idx = pmap_pte_index(va);
+	if (pte[idx] != 0)
+		return;
+
+	nkpg = vm_page_alloc(NULL, 0,
+	    VM_ALLOC_INTERRUPT | VM_ALLOC_NOOBJ | VM_ALLOC_WIRED |
+	    VM_ALLOC_ZERO);
+	if (nkpg == NULL)
+		panic("kasan_md_shadow_map_page: "
+			"no memory to grow PT table shadow map");
+	if ((nkpg->flags & PG_ZERO) == 0)
+		pmap_zero_page(nkpg);
+	paddr = VM_PAGE_TO_PHYS(nkpg);
+	pte[idx] = paddr | X86_PG_RW | X86_PG_V | X86_PG_G;
+
+	__builtin_memset((void *)va, 0xFF, PAGE_SIZE);
 }
+
+#endif

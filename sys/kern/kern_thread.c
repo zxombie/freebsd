@@ -30,7 +30,6 @@
 
 #include "opt_witness.h"
 #include "opt_hwpmc_hooks.h"
-#include "opt_sanitizer.h"
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
@@ -38,7 +37,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
-#include <sys/kasan.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
 #include <sys/proc.h>

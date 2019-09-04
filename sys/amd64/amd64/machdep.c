@@ -53,12 +53,12 @@ __FBSDID("$FreeBSD$");
 #include "opt_mp_watchdog.h"
 #include "opt_pci.h"
 #include "opt_platform.h"
-#include "opt_sanitizer.h"
 #include "opt_sched.h"
 
 #include <sys/param.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
+#include <sys/asan.h>
 #include <sys/bio.h>
 #include <sys/buf.h>
 #include <sys/bus.h>
@@ -69,7 +69,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/eventhandler.h>
 #include <sys/exec.h>
 #include <sys/imgact.h>
-#include <sys/kasan.h>
 #include <sys/kdb.h>
 #include <sys/kernel.h>
 #include <sys/ktr.h>

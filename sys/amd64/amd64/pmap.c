@@ -109,14 +109,13 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_ddb.h"
 #include "opt_pmap.h"
-#include "opt_sanitizer.h"
 #include "opt_vm.h"
 
 #include <sys/param.h>
+#include <sys/asan.h>
 #include <sys/bitstring.h>
 #include <sys/bus.h>
 #include <sys/systm.h>
-#include <sys/kasan.h>
 #include <sys/kernel.h>
 #include <sys/ktr.h>
 #include <sys/lock.h>
@@ -1420,7 +1419,7 @@ create_pagetables(vm_paddr_t *firstaddr)
 	nkasanpdp = NKASANPML4E; //PDP
 	/* Andrew: Should be enough for KVA */
 	nkasanpd = 256; //nkpdpe >> KASAN_SHADOW_SCALE_SHIFT; //PD
-	nkasanpt = nkpt >> KASAN_SHADOW_SCALE_SHIFT; //PT
+	nkasanpt = (nkpt + 7) >> KASAN_SHADOW_SCALE_SHIFT; //PT
 
 	KASANPDPphys = allocpages(firstaddr, nkasanpdp);
 	KASANPDphys = allocpages(firstaddr, nkasanpd);
@@ -1440,7 +1439,7 @@ create_pagetables(vm_paddr_t *firstaddr)
 	/* same for KASAN */
 	kasan_pd_p = (pd_entry_t *)KASANPDphys;
 	for (i = 0; i < nkasanpt; i++)
-		kasan_pd_p[i] = (KASANPTphys + ptoa(i)) | X86_PG_RW | X86_PG_V;
+		kasan_pd_p[i + 0x1ff80] = (KASANPTphys + ptoa(i)) | X86_PG_RW | X86_PG_V;
 
 	memset_std((void *)KASANPTphys, 0, nkasanpt * PAGE_SIZE);
 #endif
@@ -3792,7 +3791,7 @@ pmap_growkernel(vm_offset_t addr)
 		addr = vm_map_max(kernel_map);
 #ifdef KASAN
 	if (kernel_vm_end < addr)
-		kasan_shadow_map(kernel_vm_end, addr - kernel_vm_end);
+		kasan_shadow_map((void *)kernel_vm_end, addr - kernel_vm_end);
 #endif
 	while (kernel_vm_end < addr) {
 		pdpe = pmap_pdpe(kernel_pmap, kernel_vm_end);
@@ -7714,9 +7713,6 @@ pmap_mapdev_internal(vm_paddr_t pa, vm_size_t size, int mode, bool noflush)
 	vm_offset_t va, offset;
 	vm_size_t tmpsize;
 	int i;
-#ifdef KASAN
-	vm_size_t origsize = size;
-#endif
 
 	offset = pa & PAGE_MASK;
 	size = round_page(offset + size);
@@ -7770,17 +7766,7 @@ pmap_mapdev_internal(vm_paddr_t pa, vm_size_t size, int mode, bool noflush)
 	if (!noflush)
 		pmap_invalidate_cache_range(va, va + tmpsize);
 
-#ifdef KASAN
-{
-	vm_offset_t addr;
-
-	addr = va + offset;
-	origsize += addr & KASAN_SHADOW_MASK;
-	addr -= addr & KASAN_SHADOW_MASK;
-
-	kasan_unpoison(va + offset, origsize);
-}
-#endif
+	kasan_mark((const void *)(va + offset), size, size, 0);
 
 	return ((void *)(va + offset));
 }

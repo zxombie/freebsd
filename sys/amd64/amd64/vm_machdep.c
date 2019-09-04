@@ -47,13 +47,12 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_isa.h"
 #include "opt_cpu.h"
-#include "opt_sanitizer.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/asan.h>
 #include <sys/bio.h>
 #include <sys/buf.h>
-#include <sys/kasan.h>
 #include <sys/kernel.h>
 #include <sys/ktr.h>
 #include <sys/lock.h>
@@ -138,12 +137,6 @@ alloc_fpusave(int flags)
 	}
 	return (res);
 }
-
-/*
- * This seems to be needed for qemu. Without it we trigger an
- * assertion in virtio.
- */
-#define        KASAN_FULL_STACK
 
 /*
  * Finish a fork operation, with process p2 nearly set up.
@@ -237,12 +230,6 @@ cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 	td2->td_md.md_spinlock_count = 1;
 	td2->td_md.md_saved_flags = PSL_KERNEL | PSL_I;
 	pmap_thread_init_invl_gen(td2);
-
-#ifdef KASAN
-#ifndef KASAN_FULL_STACK
-       kasan_unpoison(td2->td_kstack, td2->td_pcb->pcb_sp - td2->td_kstack);
-#endif
-#endif
 
 	/* As an i386, do not copy io permission bitmap. */
 	pcb2->pcb_tssp = NULL;
@@ -369,6 +356,9 @@ cpu_thread_alloc(struct thread *td)
 	struct pcb *pcb;
 	struct xstate_hdr *xhdr;
 
+	kasan_mark((const void *)td->td_kstack, td->td_kstack_pages * PAGE_SIZE,
+	    td->td_kstack_pages * PAGE_SIZE, 0);
+
 	td->td_pcb = pcb = get_pcb_td(td);
 	td->td_frame = (struct trapframe *)pcb - 1;
 	pcb->pcb_save = get_pcb_user_save_pcb(pcb);
@@ -377,31 +367,15 @@ cpu_thread_alloc(struct thread *td)
 		bzero(xhdr, sizeof(*xhdr));
 		xhdr->xstate_bv = xsave_mask;
 	}
-
-#ifdef KASAN
-#ifdef KASAN_FULL_STACK
-       kasan_unpoison(td->td_kstack, td->td_kstack_pages * PAGE_SIZE);
-#else
-       kasan_unpoison((vm_offset_t)td->td_pcb, sizeof(*td->td_pcb));
-       kasan_unpoison((vm_offset_t)td->td_frame, sizeof(*td->td_frame));
-#endif
-#endif
 }
 
 void
 cpu_thread_free(struct thread *td)
 {
 
-#ifdef KASAN
-#ifdef KASAN_FULL_STACK
-       kasan_poison(td->td_kstack, td->td_kstack_pages * PAGE_SIZE);
-#else
-       kasan_poison((vm_offset_t)td->td_pcb, sizeof(*td->td_pcb));
-       kasan_poison((vm_offset_t)td->td_frame, sizeof(*td->td_frame));
-#endif
-#endif
-
 	cpu_thread_clean(td);
+	kasan_mark((const void *)td->td_kstack, 0,
+	    td->td_kstack_pages * PAGE_SIZE, KASAN_POOL_FREED);
 }
 
 bool

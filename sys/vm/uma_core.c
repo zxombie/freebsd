@@ -54,7 +54,6 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_ddb.h"
 #include "opt_param.h"
-#include "opt_sanitizer.h"
 #include "opt_vm.h"
 
 #include <sys/param.h>
@@ -67,7 +66,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/limits.h>
 #include <sys/queue.h>
 #include <sys/malloc.h>
-#include <sys/kasan.h>
+#include <sys/asan.h>
 #include <sys/ktr.h>
 #include <sys/lock.h>
 #include <sys/sysctl.h>
@@ -1212,9 +1211,7 @@ startup_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *pflag,
 	bootmem += pages * PAGE_SIZE;
 	*pflag = UMA_SLAB_BOOT;
 
-#ifdef KASAN
-       kasan_unpoison((vm_offset_t)mem, bytes);
-#endif
+	kasan_mark(mem, bytes, bytes, 0);
 
 	return (mem);
 }
@@ -1285,9 +1282,8 @@ pcpu_page_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *pflag,
 		zkva += PAGE_SIZE;
 	}
 
-#ifdef KASAN
-       kasan_unpoison(addr, bytes);
-#endif
+	/* XXX: Should we mark each pcpu entry as valid? */
+	kasan_mark((const void *)addr, bytes, bytes, 0);
 	return ((void*)addr);
 fail:
 	TAILQ_FOREACH_SAFE(p, &alloctail, listq, p_next) {
@@ -2380,9 +2376,7 @@ uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 	if (memguard_cmp_zone(zone)) {
 		item = memguard_alloc(zone->uz_size, flags);
 		if (item != NULL) {
-#ifdef KASAN
-                       kasan_unpoison((vm_offset_t)item, zone->uz_size);
-#endif
+			kasan_mark(item, zone->uz_size, zone->uz_size, 0);
 			if (zone->uz_init != NULL &&
 			    zone->uz_init(item, zone->uz_size, flags) != 0)
 				return (NULL);
@@ -2965,9 +2959,7 @@ zone_alloc_item_locked(uma_zone_t zone, void *udata, int domain, int flags)
 	if (zone->uz_import(zone->uz_arg, &item, 1, domain, flags) != 1)
 		goto fail;
 
-#ifdef KASAN
-       kasan_unpoison((vm_offset_t)item, zone->uz_size);
-#endif
+	kasan_mark(item, zone->uz_size, zone->uz_size, 0);
 
 #ifdef INVARIANTS
 	skipdbg = uma_dbg_zskip(zone, item);
@@ -3300,9 +3292,7 @@ zone_free_item(uma_zone_t zone, void *item, void *udata, enum zfreeskip skip)
 	bool skipdbg;
 #endif
 
-#ifdef KASAN
-       kasan_poison((vm_offset_t)item, zone->uz_size);
-#endif
+	kasan_mark(item, 0, zone->uz_size, KASAN_POOL_FREED);
 
 #ifdef INVARIANTS
 	skipdbg = uma_dbg_zskip(zone, item);

@@ -30,18 +30,15 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: subr_asan.c,v 1.10 2019/06/15 06:40:34 maxv Exp $");
+__FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
-#include <sys/device.h>
 #include <sys/kernel.h>
 #include <sys/param.h>
 #include <sys/conf.h>
 #include <sys/systm.h>
 #include <sys/types.h>
 #include <sys/asan.h>
-
-#include <uvm/uvm.h>
 
 #ifdef KASAN_PANIC
 #define REPORT panic
@@ -97,65 +94,50 @@ void
 kasan_shadow_map(void *addr, size_t size)
 {
 	size_t sz, npages, i;
-	vaddr_t sva, eva;
+	vm_offset_t sva, eva;
 
-	KASSERT((vaddr_t)addr % KASAN_SHADOW_SCALE_SIZE == 0);
+	KASSERT((vm_offset_t)addr % KASAN_SHADOW_SCALE_SIZE == 0,
+	    ("kasan_shadow_map: Address %p is incorrectly aligned", addr));
 
 	sz = roundup(size, KASAN_SHADOW_SCALE_SIZE) / KASAN_SHADOW_SCALE_SIZE;
 
-	sva = (vaddr_t)kasan_md_addr_to_shad(addr);
-	eva = (vaddr_t)kasan_md_addr_to_shad(addr) + sz;
+	sva = (vm_offset_t)kasan_md_addr_to_shad(addr);
+	eva = (vm_offset_t)kasan_md_addr_to_shad(addr) + sz;
 
 	sva = rounddown(sva, PAGE_SIZE);
 	eva = roundup(eva, PAGE_SIZE);
 
 	npages = (eva - sva) / PAGE_SIZE;
 
-	KASSERT(sva >= KASAN_MD_SHADOW_START && eva < KASAN_MD_SHADOW_END);
+	KASSERT(sva >= KASAN_MD_SHADOW_START,
+	    ("kasan_shadow_map: Start virtual address %jx is invalid", sva));
+	KASSERT(eva < KASAN_MD_SHADOW_END,
+	    ("kasan_shadow_map: End virtual address %jx is invalid", eva));
 
 	for (i = 0; i < npages; i++) {
 		kasan_md_shadow_map_page(sva + i * PAGE_SIZE);
 	}
 }
 
-static void
-kasan_ctors(void)
-{
-	extern uint64_t __CTOR_LIST__, __CTOR_END__;
-	size_t nentries, i;
-	uint64_t *ptr;
-
-	nentries = ((size_t)&__CTOR_END__ - (size_t)&__CTOR_LIST__) /
-	    sizeof(uintptr_t);
-
-	ptr = &__CTOR_LIST__;
-	for (i = 0; i < nentries; i++) {
-		void (*func)(void);
-
-		func = (void *)(*ptr);
-		(*func)();
-
-		ptr++;
-	}
-}
-
 void
 kasan_early_init(void *stack)
 {
+
+#ifdef notyet
 	kasan_md_early_init(stack);
+#endif
+	panic("TODO: %s", __func__);
 }
 
 void
 kasan_init(void)
 {
+
 	/* MD initialization. */
 	kasan_md_init();
 
 	/* Now officially enabled. */
 	kasan_enabled = true;
-
-	/* Call the ASAN constructors. */
-	kasan_ctors();
 }
 
 static inline const char *
@@ -195,7 +177,9 @@ kasan_report(unsigned long addr, size_t size, bool write, unsigned long pc,
 	    " %s]\n",
 	    (void *)pc, (void *)addr, size, (size > 1 ? "s" : ""),
 	    (write ? "write" : "read"), kasan_code_name(code));
+#ifdef notyet
 	kasan_md_unwind();
+#endif
 }
 
 static __always_inline void
@@ -224,11 +208,15 @@ kasan_shadow_Nbyte_fill(const void *addr, size_t size, uint8_t code)
 
 	if (__predict_false(size == 0))
 		return;
-	if (__predict_false(kasan_md_unsupported((vaddr_t)addr)))
+	if (__predict_false(kasan_md_unsupported((vm_offset_t)addr)))
 		return;
 
-	KASSERT((vaddr_t)addr % KASAN_SHADOW_SCALE_SIZE == 0);
-	KASSERT(size % KASAN_SHADOW_SCALE_SIZE == 0);
+	KASSERT((vm_offset_t)addr % KASAN_SHADOW_SCALE_SIZE == 0,
+	    ("kasan_shadow_Nbyte_fill: Address %p is incorrectly aligned",
+	    addr));
+	KASSERT(size % KASAN_SHADOW_SCALE_SIZE == 0,
+	    ("kasan_shadow_Nbyte_fill: Size (%zx) must be a multiple of %ld",
+	    size, KASAN_SHADOW_SCALE_SIZE));
 
 	shad = (void *)kasan_md_addr_to_shad(addr);
 	size = size >> KASAN_SHADOW_SCALE_SHIFT;
@@ -241,14 +229,6 @@ kasan_add_redzone(size_t *size)
 {
 	*size = roundup(*size, KASAN_SHADOW_SCALE_SIZE);
 	*size += KASAN_SHADOW_SCALE_SIZE;
-}
-
-void
-kasan_softint(struct lwp *l)
-{
-	const void *stk = (const void *)uvm_lwp_getuarea(l);
-
-	kasan_shadow_Nbyte_fill(stk, USPACE, 0);
 }
 
 /*
@@ -266,9 +246,16 @@ kasan_mark(const void *addr, size_t size, size_t sz_with_redz, uint8_t code)
 	size_t i, n, redz;
 	int8_t *shad;
 
-	KASSERT((vaddr_t)addr % KASAN_SHADOW_SCALE_SIZE == 0);
+	/* XXX: Work around importing DMAP memory */
+	if (__predict_false(kasan_md_unsupported((vm_offset_t)addr)))
+		return;
+
+	KASSERT((vm_offset_t)addr % KASAN_SHADOW_SCALE_SIZE == 0,
+	    ("kasan_mark: Address %p is incorrectly aligned", addr));
 	redz = sz_with_redz - roundup(size, KASAN_SHADOW_SCALE_SIZE);
-	KASSERT(redz % KASAN_SHADOW_SCALE_SIZE == 0);
+	KASSERT(redz % KASAN_SHADOW_SCALE_SIZE == 0,
+	    ("kasan_mark: Redzone size (%zx) must be a multiple of %ld", redz,
+	    KASAN_SHADOW_SCALE_SIZE));
 	shad = kasan_md_addr_to_shad(addr);
 
 	/* Chunks of 8 bytes, valid. */
@@ -424,6 +411,7 @@ kasan_shadow_check(unsigned long addr, size_t size, bool write,
 
 /* -------------------------------------------------------------------------- */
 
+#ifdef notyet
 void *
 kasan_memcpy(void *dst, const void *src, size_t len)
 {
@@ -548,6 +536,7 @@ kasan_copyoutstr(const void *kaddr, void *uaddr, size_t len, size_t *done)
 	kasan_shadow_check((unsigned long)kaddr, len, false, __RET_ADDR);
 	return copyoutstr(kaddr, uaddr, len, done);
 }
+#endif
 
 /* -------------------------------------------------------------------------- */
 
@@ -557,12 +546,14 @@ void __asan_unregister_globals(struct __asan_global *, size_t);
 void
 __asan_register_globals(struct __asan_global *globals, size_t n)
 {
+#ifdef notyet
 	size_t i;
 
 	for (i = 0; i < n; i++) {
 		kasan_mark(globals[i].beg, globals[i].size,
 		    globals[i].size_with_redzone, KASAN_GENERIC_REDZONE);
 	}
+#endif
 }
 
 void

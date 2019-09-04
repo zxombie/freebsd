@@ -32,11 +32,11 @@
 #ifndef _SYS_ASAN_H_
 #define _SYS_ASAN_H_
 
-#ifdef _KERNEL_OPT
-#include "opt_kasan.h"
+#ifndef _KERNEL
+#error "Do not include sys/asan.h from userland"
 #endif
 
-#include <sys/types.h>
+#include "opt_sanitizer.h"
 
 /* Stack redzone values. Part of the compiler ABI. */
 #define KASAN_STACK_LEFT	0xF1
@@ -56,7 +56,6 @@
 void kasan_shadow_map(void *, size_t);
 void kasan_early_init(void *);
 void kasan_init(void);
-void kasan_softint(struct lwp *);
 
 void kasan_add_redzone(size_t *);
 void kasan_mark(const void *, size_t, size_t, uint8_t);
