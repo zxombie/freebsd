@@ -1,5 +1,6 @@
 /*-
- * Copyright (c) 2014 Andrew Turner <andrew@FreeBSD.org>
+ * Copyright (c) 2008 Semihalf, Rafal Jaworowski
+ * Copyright (c) 2015 Andrew Turner
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -14,7 +15,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -23,40 +24,41 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $FreeBSD$
  */
 
-#ifndef FDT_PLATFORM_H
-#define FDT_PLATFORM_H
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
 
-struct fdt_header;
+#include <stand.h>
+#include "bootstrap.h"
 
-struct fdt_mem_region {
-	unsigned long	start;
-	unsigned long	size;
+struct devsw memdisk_dev;
+
+struct devsw *devsw[] = {
+	&memdisk_dev,
+	NULL
 };
 
-#define	TMP_MAX_ETH	8
+struct fs_ops elffs_fsops;
 
-struct fdt_header *fdt_get(void);
-int fdt_copy(vm_offset_t);
-void fdt_fixup_cpubusfreqs(unsigned long, unsigned long);
-void fdt_fixup_ethernet(const char *, char *, int);
-void fdt_fixup_memory(struct fdt_mem_region *, size_t);
-void fdt_fixup_stdout(const char *);
-void fdt_apply_overlays(void);
-int fdt_load_dtb_addr(struct fdt_header *);
-int fdt_load_dtb_file(const char *);
-void fdt_load_dtb_overlays(const char *);
-int fdt_setup_fdtp(void);
-int fdt_is_setup(void);
+struct fs_ops *file_system[] = {
+	&elffs_fsops,
+#ifdef EFI_ZFS_BOOT
+	&zfs_fsops,
+#endif
+	&dosfs_fsops,
+	&ufs_fsops,
+	&cd9660_fsops,
+	&gzipfs_fsops,
+	&bzipfs_fsops,
+	NULL
+};
 
-/* The platform library needs to implement these functions */
-int fdt_platform_load_dtb(void);
-void fdt_platform_load_overlays(void);
-void fdt_platform_fixups(void);
+//extern struct console pl011_console;
+extern struct console fdt_console;
 
-/* Devmatch/pnp function */
-const char *fdt_devmatch_next(int *tag, int *compatlen);
-
-#endif /* FDT_PLATFORM_H */
+struct console *consoles[] = {
+	&fdt_console,
+	//&pl011_console,
+	NULL
+};

@@ -959,6 +959,16 @@ fdt_fixup(void)
 	return (1);
 }
 
+struct fdt_header *
+fdt_get(void)
+{
+
+	if (fdt_fixup() == 0)
+		return (NULL);
+
+	return (fdtp);
+}
+
 /*
  * Copy DTB blob to specified location and return size
  */

@@ -1,6 +1,12 @@
 /*-
- * Copyright (c) 2014 Andrew Turner <andrew@FreeBSD.org>
- * All rights reserved.
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2019 Andrew Turner
+ *
+ * This software was developed by SRI International and the University of
+ * Cambridge Computer Laboratory (Department of Computer Science and
+ * Technology) under DARPA contract HR0011-18-C-0016 ("ECATS"), as part of the
+ * DARPA SSITH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -14,7 +20,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -22,41 +28,11 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $FreeBSD$
  */
 
-#ifndef FDT_PLATFORM_H
-#define FDT_PLATFORM_H
+#ifndef _LNX_LNXLOADER_H_
+#define _LNX_LNXLOADER_H_
 
-struct fdt_header;
+char *lnx_fmtdev(void *);
 
-struct fdt_mem_region {
-	unsigned long	start;
-	unsigned long	size;
-};
-
-#define	TMP_MAX_ETH	8
-
-struct fdt_header *fdt_get(void);
-int fdt_copy(vm_offset_t);
-void fdt_fixup_cpubusfreqs(unsigned long, unsigned long);
-void fdt_fixup_ethernet(const char *, char *, int);
-void fdt_fixup_memory(struct fdt_mem_region *, size_t);
-void fdt_fixup_stdout(const char *);
-void fdt_apply_overlays(void);
-int fdt_load_dtb_addr(struct fdt_header *);
-int fdt_load_dtb_file(const char *);
-void fdt_load_dtb_overlays(const char *);
-int fdt_setup_fdtp(void);
-int fdt_is_setup(void);
-
-/* The platform library needs to implement these functions */
-int fdt_platform_load_dtb(void);
-void fdt_platform_load_overlays(void);
-void fdt_platform_fixups(void);
-
-/* Devmatch/pnp function */
-const char *fdt_devmatch_next(int *tag, int *compatlen);
-
-#endif /* FDT_PLATFORM_H */
+#endif

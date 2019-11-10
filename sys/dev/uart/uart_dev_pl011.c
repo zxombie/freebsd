@@ -33,6 +33,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#ifdef _KERNEL
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/bus.h>
@@ -57,6 +58,9 @@ __FBSDID("$FreeBSD$");
 #endif
 
 #include <sys/kdb.h>
+#else /* !_KERNEL */
+#include <kuart.h>
+#endif
 
 #ifdef __aarch64__
 #define	IS_FDT	(arm64_bus_method == ARM64_BUS_FDT)
@@ -281,6 +285,7 @@ uart_pl011_getc(struct uart_bas *bas, struct mtx *hwmtx)
 	return (c);
 }
 
+#ifdef _KERNEL
 /*
  * High-level UART interface.
  */
@@ -320,11 +325,14 @@ static kobj_method_t uart_pl011_methods[] = {
 
 	{ 0, 0 }
 };
+#endif
 
 static struct uart_class uart_pl011_class = {
+#ifdef _KERNEL
 	"uart_pl011",
 	uart_pl011_methods,
 	sizeof(struct uart_pl011_softc),
+#endif
 	.uc_ops = &uart_pl011_ops,
 	.uc_range = 0x48,
 	.uc_rclk = 0,
@@ -350,6 +358,7 @@ static struct acpi_uart_compat_data acpi_compat_data[] = {
 UART_ACPI_CLASS_AND_DEVICE(acpi_compat_data);
 #endif
 
+#ifdef _KERNEL
 static int
 uart_pl011_bus_attach(struct uart_softc *sc)
 {
@@ -612,3 +621,4 @@ uart_pl011_bus_ungrab(struct uart_softc *sc)
 	__uart_setreg(bas, UART_IMSC, psc->imsc);
 	uart_unlock(sc->sc_hwmtx);
 }
+#endif

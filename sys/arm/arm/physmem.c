@@ -37,13 +37,18 @@ __FBSDID("$FreeBSD$");
  */
 
 #include <sys/param.h>
+#ifdef _KERNEL
 #include <sys/systm.h>
+#endif
 #include <vm/vm.h>
 #include <vm/vm_param.h>
 #include <vm/vm_page.h>
 #include <vm/vm_phys.h>
 #include <machine/md_var.h>
 #include <arm/include/physmem.h>
+#ifdef _STANDALONE
+#include <stand.h>
+#endif
 
 /*
  * These structures are used internally to keep track of regions of physical
@@ -370,6 +375,7 @@ arm_physmem_avail(vm_paddr_t *avail, size_t maxavail)
 	return (regions_to_avail(avail, EXFLAG_NOALLOC, maxavail, NULL, NULL));
 }
 
+#ifdef _KERNEL
 /*
  * Process all the regions added earlier into the global avail lists.
  *
@@ -403,4 +409,5 @@ DB_SHOW_COMMAND(physmem, db_show_physmem)
 }
 
 #endif /* DDB */
+#endif
 

@@ -119,11 +119,12 @@ ischar(void)
 {
     int		cons;
 
-    for (cons = 0; consoles[cons] != NULL; cons++)
+    for (cons = 0; consoles[cons] != NULL; cons++) {
 	if ((consoles[cons]->c_flags & (C_PRESENTIN | C_ACTIVEIN)) ==
 	    (C_PRESENTIN | C_ACTIVEIN) &&
 	    (consoles[cons]->c_ready() != 0))
 		return(1);
+}
     return(0);
 }
 

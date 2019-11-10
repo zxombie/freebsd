@@ -1,5 +1,5 @@
 # $FreeBSD$
 
-NO_OBJ=t
+SUBDIR=lnx
 
 .include <bsd.subdir.mk>

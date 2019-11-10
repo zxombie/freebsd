@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2014 Andrew Turner <andrew@FreeBSD.org>
+ * Copyright (c) 2014 Andrew Turner
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -14,7 +14,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -23,40 +23,70 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $FreeBSD$
  */
 
-#ifndef FDT_PLATFORM_H
-#define FDT_PLATFORM_H
+/*
+ * We need to be the correct format for HBOOT.
+ */
 
-struct fdt_header;
+#define	INIT_STACK_SIZE		(4096 * 8)
 
-struct fdt_mem_region {
-	unsigned long	start;
-	unsigned long	size;
-};
+.global hboot_start
+hboot_start:
+	/* The Linux boot header */
+	b	_start
+	.word	0	/* Reserved */
+	.quad	0x0	/* Load offset from start of ram */
+	.quad	0x0	/* Effective size of kernel */
+	.quad	0x0	/* Informative flags */
+	.quad	0	/* Reserved */
+	.quad	0	/* Reserved */
+	.quad	0	/* Reserved */
+	.byte	0x41	/* string "ARM\x64" */
+	.byte	0x52
+	.byte	0x4d
+	.byte	0x64
+	.word	0	/* Reserved */
 
-#define	TMP_MAX_ETH	8
+	.globl	_start
+_start:
+	/* Backup the data passed to us */
+	mov	x20, x0
+	mov	x21, x1
+	mov	x22, x2
+	mov	x23, x3
 
-struct fdt_header *fdt_get(void);
-int fdt_copy(vm_offset_t);
-void fdt_fixup_cpubusfreqs(unsigned long, unsigned long);
-void fdt_fixup_ethernet(const char *, char *, int);
-void fdt_fixup_memory(struct fdt_mem_region *, size_t);
-void fdt_fixup_stdout(const char *);
-void fdt_apply_overlays(void);
-int fdt_load_dtb_addr(struct fdt_header *);
-int fdt_load_dtb_file(const char *);
-void fdt_load_dtb_overlays(const char *);
-int fdt_setup_fdtp(void);
-int fdt_is_setup(void);
+	adr	x0, __bss_start
+	adr	x1, __bss_end
 
-/* The platform library needs to implement these functions */
-int fdt_platform_load_dtb(void);
-void fdt_platform_load_overlays(void);
-void fdt_platform_fixups(void);
+	b 2f
 
-/* Devmatch/pnp function */
-const char *fdt_devmatch_next(int *tag, int *compatlen);
+1:
+	stp	xzr, xzr, [x0], #16
+2:
+	cmp	x0, x1
+	b.lo	1b
 
-#endif /* FDT_PLATFORM_H */
+	adr	x0, end_stack
+	mov	sp, x0
+
+	adr	x0, hboot_start
+	adr	x1, _DYNAMIC
+
+	bl	self_reloc
+
+	mov	x0, x20
+	mov	x1, x21
+	mov	x2, x22
+	mov	x3, x23
+
+	bl	arm64_main
+
+1:	wfi
+	b	1b
+
+	.data
+init_stack:
+	.space	INIT_STACK_SIZE
+	.align	4
+end_stack:

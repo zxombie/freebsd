@@ -34,7 +34,6 @@ __FBSDID("$FreeBSD$");
 #include <machine/armreg.h>
 
 #include <stand.h>
-#include <efi.h>
 
 #include "cache.h"
 
