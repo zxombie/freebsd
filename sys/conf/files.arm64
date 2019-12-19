@@ -252,6 +252,7 @@ dev/pci/pci_host_generic_fdt.c	optional	pci fdt
 dev/pci/pci_dw_mv.c		optional	pci fdt
 dev/pci/pci_dw.c		optional	pci fdt
 dev/pci/pci_dw_if.m		optional	pci fdt
+dev/pci/pci_n1sdp.c		optional	pci acpi
 dev/psci/psci.c			standard
 dev/psci/smccc_arm64.S		standard
 dev/psci/smccc.c		standard
