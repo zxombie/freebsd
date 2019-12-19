@@ -57,6 +57,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/pci/pcireg.h>
 #include <dev/pci/pcib_private.h>
 #include <dev/pci/pci_host_generic.h>
+#include <dev/pci/pci_host_generic_acpi.h>
 
 #include <machine/cpu.h>
 #include <machine/bus.h>
@@ -87,11 +88,6 @@ __FBSDID("$FreeBSD$");
 #define	SPACE_CODE_IO_SPACE	0x1
 #define	PROPS_CELL_SIZE		1
 #define	PCI_ADDR_CELL_SIZE	2
-
-struct generic_pcie_acpi_softc {
-	struct generic_pcie_core_softc base;
-	ACPI_BUFFER		ap_prt;		/* interrupt routing table */
-};
 
 /* Forward prototypes */
 
