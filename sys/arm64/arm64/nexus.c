@@ -94,18 +94,20 @@ static	int nexus_attach(device_t);
 #ifdef FDT
 static device_probe_t	nexus_fdt_probe;
 static device_attach_t	nexus_fdt_attach;
+static bus_activate_resource_t nexus_fdt_activate_resource;
 #endif
 #ifdef DEV_ACPI
 static device_probe_t	nexus_acpi_probe;
 static device_attach_t	nexus_acpi_attach;
+static bus_activate_resource_t nexus_acpi_activate_resource;
 #endif
 
 static	int nexus_print_child(device_t, device_t);
 static	device_t nexus_add_child(device_t, u_int, const char *, int);
 static	struct resource *nexus_alloc_resource(device_t, device_t, int, int *,
     rman_res_t, rman_res_t, rman_res_t, u_int);
-static	int nexus_activate_resource(device_t, device_t, int, int,
-    struct resource *);
+static	int nexus_activate_irq(device_t, struct resource *);
+static	int nexus_activate_mem(struct resource *, int);
 static int nexus_config_intr(device_t dev, int irq, enum intr_trigger trig,
     enum intr_polarity pol);
 static struct resource_list *nexus_get_reslist(device_t, device_t);
@@ -134,7 +136,6 @@ static device_method_t nexus_methods[] = {
 	DEVMETHOD(bus_print_child,	nexus_print_child),
 	DEVMETHOD(bus_add_child,	nexus_add_child),
 	DEVMETHOD(bus_alloc_resource,	nexus_alloc_resource),
-	DEVMETHOD(bus_activate_resource,	nexus_activate_resource),
 	DEVMETHOD(bus_config_intr,	nexus_config_intr),
 	DEVMETHOD(bus_get_resource_list, nexus_get_reslist),
 	DEVMETHOD(bus_set_resource,	nexus_set_resource),
@@ -341,38 +342,39 @@ nexus_get_bus_tag(device_t bus __unused, device_t child __unused)
 }
 
 static int
-nexus_activate_resource(device_t bus, device_t child, int type, int rid,
-    struct resource *r)
+nexus_activate_irq(device_t child, struct resource *r)
+{
+	int err;
+
+	err = intr_activate_irq(child, r);
+	if (err != 0) {
+		rman_deactivate_resource(r);
+	}
+	return (err);
+}
+
+static int
+nexus_activate_mem(struct resource *r, int flags)
 {
 	int err;
 	bus_addr_t paddr;
 	bus_size_t psize;
 	bus_space_handle_t vaddr;
 
-	if ((err = rman_activate_resource(r)) != 0)
-		return (err);
-
 	/*
-	 * If this is a memory resource, map it into the kernel.
+	 * This is a memory resource, map it into the kernel.
 	 */
-	if (type == SYS_RES_MEMORY || type == SYS_RES_IOPORT) {
-		paddr = (bus_addr_t)rman_get_start(r);
-		psize = (bus_size_t)rman_get_size(r);
-		err = bus_space_map(&memmap_bus, paddr, psize, 0, &vaddr);
-		if (err != 0) {
-			rman_deactivate_resource(r);
-			return (err);
-		}
-		rman_set_bustag(r, &memmap_bus);
-		rman_set_virtual(r, (void *)vaddr);
-		rman_set_bushandle(r, vaddr);
-	} else if (type == SYS_RES_IRQ) {
-		err = intr_activate_irq(child, r);
-		if (err != 0) {
-			rman_deactivate_resource(r);
-			return (err);
-		}
+	paddr = (bus_addr_t)rman_get_start(r);
+	psize = (bus_size_t)rman_get_size(r);
+	err = bus_space_map(&memmap_bus, paddr, psize, flags, &vaddr);
+	if (err != 0) {
+		rman_deactivate_resource(r);
+		return (err);
 	}
+	rman_set_bustag(r, &memmap_bus);
+	rman_set_virtual(r, (void *)vaddr);
+	rman_set_bushandle(r, vaddr);
+
 	return (0);
 }
 
@@ -426,6 +428,9 @@ static device_method_t nexus_fdt_methods[] = {
 	DEVMETHOD(device_probe,		nexus_fdt_probe),
 	DEVMETHOD(device_attach,	nexus_fdt_attach),
 
+	/* Bus interface */
+	DEVMETHOD(bus_activate_resource,	nexus_fdt_activate_resource),
+
 	/* OFW interface */
 	DEVMETHOD(ofw_bus_map_intr,	nexus_ofw_map_intr),
 
@@ -460,6 +465,37 @@ nexus_fdt_attach(device_t dev)
 }
 
 static int
+nexus_fdt_activate_resource(device_t bus, device_t child, int type, int rid,
+    struct resource *r)
+{
+	int err, flags;
+
+	if ((err = rman_activate_resource(r)) != 0)
+		return (err);
+
+	switch (type) {
+	case SYS_RES_IRQ:
+		return (nexus_activate_irq(child, r));
+	case SYS_RES_MEMORY:
+	case SYS_RES_IOPORT:
+		flags = 0;
+		/*
+		 * If the parent bus has the nonposted-mmio property we
+		 * need to use non-posted IO to access the device. When
+		 * we find this property set the BUS_SPACE_MAP_NONPOSTED
+		 * flag to be passed to bus_space_map.
+		 */
+		if (ofw_bus_has_prop(device_get_parent(child),
+		    "nonposted-mmio")) {
+			flags |= BUS_SPACE_MAP_NONPOSTED;
+		}
+		return (nexus_activate_mem(r, flags));
+	default:
+		return (EINVAL);
+	}
+}
+
+static int
 nexus_ofw_map_intr(device_t dev, device_t child, phandle_t iparent, int icells,
     pcell_t *intr)
 {
@@ -485,6 +521,9 @@ static device_method_t nexus_acpi_methods[] = {
 	/* Device interface */
 	DEVMETHOD(device_probe,		nexus_acpi_probe),
 	DEVMETHOD(device_attach,	nexus_acpi_attach),
+
+	/* Bus interface */
+	DEVMETHOD(bus_activate_resource,	nexus_acpi_activate_resource),
 
 	/* ACPI interface */
 	DEVMETHOD(acpi_bus_map_intr,	nexus_acpi_map_intr),
@@ -518,6 +557,26 @@ nexus_acpi_attach(device_t dev)
 
 	nexus_add_child(dev, 10, "acpi", 0);
 	return (nexus_attach(dev));
+}
+
+static int
+nexus_acpi_activate_resource(device_t bus, device_t child, int type, int rid,
+    struct resource *r)
+{
+	int err;
+
+	if ((err = rman_activate_resource(r)) != 0)
+		return (err);
+
+	switch (type) {
+	case SYS_RES_IRQ:
+		return (nexus_activate_irq(child, r));
+	case SYS_RES_MEMORY:
+	case SYS_RES_IOPORT:
+		return (nexus_activate_mem(r, 0));
+	default:
+		return (EINVAL);
+	}
 }
 
 static int
