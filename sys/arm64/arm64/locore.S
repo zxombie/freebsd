@@ -301,6 +301,12 @@ LENTRY(drop_to_el1)
 	msr	icc_sre_el2, x2
 2:
 
+	/* Set the Monitor Debug Configuration Register */
+	mrs	x2, mdcr_el2
+	/* Enable SPE at EL1 */
+	orr	x2, x2, (3 << 12)
+	msr	mdcr_el2, x2
+
 	/* Set the address to return to our return address */
 	msr	elr_el2, x30
 	isb
