@@ -146,6 +146,7 @@ struct cpu_desc {
 #ifdef NOTYET
 	uint64_t	id_aa64pfr2;
 #endif
+	uint64_t	id_aa64smfr0;
 	uint64_t	id_aa64zfr0;
 	uint64_t	ctr;
 #ifdef COMPAT_FREEBSD32
@@ -1555,6 +1556,12 @@ static const struct mrs_field id_aa64pfr2_fields[] = {
 #endif
 
 
+/* ID_AA64SMFR0_EL1 */
+static struct mrs_field id_aa64smfr0_fields[] = {
+	MRS_FIELD_END,
+};
+
+
 /* ID_AA64ZFR0_EL1 */
 static const struct mrs_field_value id_aa64zfr0_f64mm[] = {
 	MRS_FIELD_VALUE_NONE_IMPL(ID_AA64ZFR0, F64MM, NONE, IMPL),
@@ -2652,6 +2659,11 @@ print_cpu_features(u_int cpu, struct cpu_desc *desc,
 		print_id_register(sb, "Auxiliary Features 1",
 		    desc->id_aa64afr1, id_aa64afr1_fields);
 
+	/* AArch64 SME Feature Register 0 */
+	if (SHOULD_PRINT_REG(id_aa64smfr0))
+		print_id_register(sb, "SME Features 0",
+		    desc->id_aa64smfr0, id_aa64smfr0_fields);
+
 	/* AArch64 SVE Feature Register 0 */
 	if (desc->have_sve) {
 		if (SHOULD_PRINT_REG(id_aa64zfr0) ||
@@ -2765,6 +2777,7 @@ identify_cpu(u_int cpu)
 	desc->have_sve =
 	    (ID_AA64PFR0_SVE_VAL(desc->id_aa64pfr0) != 0);
 	desc->id_aa64zfr0 = READ_SPECIALREG(ID_AA64ZFR0_EL1_REG);
+	desc->id_aa64smfr0 = READ_SPECIALREG(ID_AA64SMFR0_EL1_REG);
 
 	desc->clidr = READ_SPECIALREG(clidr_el1);
 
