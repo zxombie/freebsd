@@ -1147,7 +1147,7 @@ pmap_bootstrap_l3(vm_offset_t va)
  *	Bootstrap the system enough to run with virtual memory.
  */
 void
-pmap_bootstrap(vm_offset_t l0pt, vm_paddr_t kernstart, vm_size_t kernlen)
+pmap_bootstrap(vm_paddr_t kernstart, vm_size_t kernlen)
 {
 	vm_offset_t dpcpu, msgbufpv;
 	vm_paddr_t start_pa, pa, min_pa;
@@ -1164,9 +1164,10 @@ pmap_bootstrap(vm_offset_t l0pt, vm_paddr_t kernstart, vm_size_t kernlen)
 	printf("%lx\n", (KERNBASE >> L1_SHIFT) & Ln_ADDR_MASK);
 
 	/* Set this early so we can use the pagetable walking functions */
-	kernel_pmap_store.pm_l0 = (pd_entry_t *)l0pt;
+	kernel_pmap_store.pm_l0 = pagetable_l0_ttbr1;
 	PMAP_LOCK_INIT(kernel_pmap);
-	kernel_pmap->pm_l0_paddr = l0pt - kern_delta;
+	kernel_pmap->pm_l0_paddr =
+	    pmap_early_vtophys((vm_offset_t)kernel_pmap_store.pm_l0);
 	kernel_pmap->pm_cookie = COOKIE_FROM(-1, INT_MIN);
 	kernel_pmap->pm_stage = PM_STAGE1;
 	kernel_pmap->pm_levels = 4;

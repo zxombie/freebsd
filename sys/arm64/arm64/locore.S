@@ -133,10 +133,6 @@ virtdone:
 	/* Backup the module pointer */
 	mov	x1, x0
 
-	/* Make the page table base a virtual address */
-	sub	x26, x26, x29
-	sub	x24, x24, x29
-
 	sub	sp, sp, #BOOTPARAMS_SIZE
 	mov	x0, sp
 
@@ -148,7 +144,6 @@ virtdone:
 	adrp	x25, initstack
 	add	x25, x25, :lo12:initstack
 	str	x25, [x0, #BP_KERN_STACK]
-	str	x24, [x0, #BP_KERN_L0PT]
 	str	x27, [x0, #BP_KERN_TTBR0]
 	str	x23, [x0, #BP_BOOT_EL]
 
