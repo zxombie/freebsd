@@ -1058,7 +1058,7 @@ pmap_bootstrap_l3_page(struct pmap_bootstrap_state *state, int i)
 }
 
 static void
-pmap_bootstrap_dmap(vm_offset_t kern_l1, vm_paddr_t min_pa)
+pmap_bootstrap_dmap(vm_paddr_t min_pa)
 {
 	int i;
 
@@ -1120,7 +1120,7 @@ pmap_bootstrap_dmap(vm_offset_t kern_l1, vm_paddr_t min_pa)
 }
 
 static void
-pmap_bootstrap_l2(vm_offset_t l1pt, vm_offset_t va)
+pmap_bootstrap_l2(vm_offset_t va)
 {
 	KASSERT((va & L1_OFFSET) == 0, ("Invalid virtual address"));
 
@@ -1132,7 +1132,7 @@ pmap_bootstrap_l2(vm_offset_t l1pt, vm_offset_t va)
 }
 
 static void
-pmap_bootstrap_l3(vm_offset_t l1pt, vm_offset_t va)
+pmap_bootstrap_l3(vm_offset_t va)
 {
 	KASSERT((va & L2_OFFSET) == 0, ("Invalid virtual address"));
 
@@ -1147,8 +1147,7 @@ pmap_bootstrap_l3(vm_offset_t l1pt, vm_offset_t va)
  *	Bootstrap the system enough to run with virtual memory.
  */
 void
-pmap_bootstrap(vm_offset_t l0pt, vm_offset_t l1pt, vm_paddr_t kernstart,
-    vm_size_t kernlen)
+pmap_bootstrap(vm_offset_t l0pt, vm_paddr_t kernstart, vm_size_t kernlen)
 {
 	vm_offset_t dpcpu, msgbufpv;
 	vm_paddr_t start_pa, pa, min_pa;
@@ -1161,8 +1160,7 @@ pmap_bootstrap(vm_offset_t l0pt, vm_offset_t l1pt, vm_paddr_t kernstart,
 
 	kern_delta = KERNBASE - kernstart;
 
-	printf("pmap_bootstrap %lx %lx %lx\n", l1pt, kernstart, kernlen);
-	printf("%lx\n", l1pt);
+	printf("pmap_bootstrap %lx %lx\n", kernstart, kernlen);
 	printf("%lx\n", (KERNBASE >> L1_SHIFT) & Ln_ADDR_MASK);
 
 	/* Set this early so we can use the pagetable walking functions */
@@ -1196,7 +1194,7 @@ pmap_bootstrap(vm_offset_t l0pt, vm_offset_t l1pt, vm_paddr_t kernstart,
 	bs_state.freemempos = roundup2(bs_state.freemempos, PAGE_SIZE);
 
 	/* Create a direct map region early so we can use it for pa -> va */
-	pmap_bootstrap_dmap(l1pt, min_pa);
+	pmap_bootstrap_dmap(min_pa);
 	bs_state.dmap_valid = true;
 	/*
 	 * We only use PXN when we know nothing will be executed from it, e.g.
@@ -1211,10 +1209,9 @@ pmap_bootstrap(vm_offset_t l0pt, vm_offset_t l1pt, vm_paddr_t kernstart,
 	 * loader allocated the first and only l2 page table page used to map
 	 * the kernel, preloaded files and module metadata.
 	 */
-	pmap_bootstrap_l2(l1pt, KERNBASE + L1_SIZE);
+	pmap_bootstrap_l2(KERNBASE + L1_SIZE);
 	/* And the l3 tables for the early devmap */
-	pmap_bootstrap_l3(l1pt,
-	    VM_MAX_KERNEL_ADDRESS - (PMAP_MAPDEV_EARLY_SIZE));
+	pmap_bootstrap_l3(VM_MAX_KERNEL_ADDRESS - (PMAP_MAPDEV_EARLY_SIZE));
 
 	cpu_tlb_flushID();
 

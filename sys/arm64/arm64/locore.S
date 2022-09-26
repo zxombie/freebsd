@@ -144,7 +144,6 @@ virtdone:
 	neg	x29, x29
 
 	str	x1,  [x0, #BP_MODULEP]
-	str	x26, [x0, #BP_KERN_L1PT]
 	str	x29, [x0, #BP_KERN_DELTA]
 	adrp	x25, initstack
 	add	x25, x25, :lo12:initstack
