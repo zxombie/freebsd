@@ -32,6 +32,9 @@
 #define	GT_PHYS_NS_IRQ	30
 #define	GT_VIRT_IRQ	27
 
+struct hyp;
+struct hypctx;
+
 struct vtimer
 {
 	uint64_t	cnthctl_el2;
@@ -70,13 +73,14 @@ void 	vtimer_cpuinit(struct hypctx *);
 void 	vtimer_cpucleanup(struct hypctx *);
 void	vtimer_vmcleanup(struct hyp *);
 void	vtimer_cleanup(void);
+void	vtimer_sync_hwstate(struct hypctx *hypctx);
 
-int 	vtimer_phys_ctl_read(void *vm, int vcpuid, uint64_t *rval, void *arg);
-int 	vtimer_phys_ctl_write(void *vm, int vcpuid, uint64_t wval, void *arg);
-int 	vtimer_phys_cnt_read(void *vm, int vcpuid, uint64_t *rval, void *arg);
-int 	vtimer_phys_cnt_write(void *vm, int vcpuid, uint64_t wval, void *arg);
-int 	vtimer_phys_cval_read(void *vm, int vcpuid, uint64_t *rval, void *arg);
-int 	vtimer_phys_cval_write(void *vm, int vcpuid, uint64_t wval, void *arg);
-int 	vtimer_phys_tval_read(void *vm, int vcpuid, uint64_t *rval, void *arg);
-int 	vtimer_phys_tval_write(void *vm, int vcpuid, uint64_t wval, void *arg);
+int 	vtimer_phys_ctl_read(struct vcpu *vcpu, uint64_t *rval, void *arg);
+int 	vtimer_phys_ctl_write(struct vcpu *vcpu, uint64_t wval, void *arg);
+int 	vtimer_phys_cnt_read(struct vcpu *vcpu, uint64_t *rval, void *arg);
+int 	vtimer_phys_cnt_write(struct vcpu *vcpu, uint64_t wval, void *arg);
+int 	vtimer_phys_cval_read(struct vcpu *vcpu, uint64_t *rval, void *arg);
+int 	vtimer_phys_cval_write(struct vcpu *vcpu, uint64_t wval, void *arg);
+int 	vtimer_phys_tval_read(struct vcpu *vcpu, uint64_t *rval, void *arg);
+int 	vtimer_phys_tval_write(struct vcpu *vcpu, uint64_t wval, void *arg);
 #endif

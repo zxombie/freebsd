@@ -24,7 +24,9 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/param.h>
+#include <sys/cdefs.h>
+#include <sys/types.h>
+#include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 
@@ -109,9 +111,10 @@ void
 reset_vm_el2_regs(void *vcpu)
 {
 	struct hypctx *el2ctx;
-	uint64_t cpu_aff;
+	uint64_t cpu_aff, vcpuid;
 
 	el2ctx = vcpu;
+	vcpuid = vcpu_vcpuid(el2ctx->vcpu);
 
 	/*
 	 * Set the Hypervisor Configuration Register:
@@ -141,8 +144,14 @@ reset_vm_el2_regs(void *vcpu)
 	el2ctx->vmpidr_el2 = VMPIDR_EL2_RES1;
 	/* The guest will detect a multi-core, single-threaded CPU */
 	el2ctx->vmpidr_el2 &= ~VMPIDR_EL2_U & ~VMPIDR_EL2_MT;
-	/* Only 24 bits of affinity, for a grand total of 16,777,216 cores. */
-	cpu_aff = el2ctx->vcpu & (CPU_AFF0_MASK | CPU_AFF1_MASK | CPU_AFF2_MASK);
+	/*
+	 * Generate the guest MPIDR value. We only support 16 CPUs at affinity
+	 * level 0 to simplify the vgicv3 driver (see writing sgi1r_el1).
+	 */
+	cpu_aff = (vcpuid & 0xf) << MPIDR_AFF0_SHIFT |
+	    ((vcpuid >> 4) & 0xff) << MPIDR_AFF1_SHIFT |
+	    ((vcpuid >> 12) & 0xff) << MPIDR_AFF2_SHIFT |
+	    ((vcpuid >> 20) & 0xff) << MPIDR_AFF3_SHIFT;
 	el2ctx->vmpidr_el2 |= cpu_aff;
 
 	/* Use the same CPU identification information as the host */

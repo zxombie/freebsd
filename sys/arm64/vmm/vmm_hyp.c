@@ -43,71 +43,6 @@ uint64_t vmm_hyp_enter(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
     uint64_t, uint64_t, uint64_t);
 uint64_t vmm_enter_guest(struct hypctx *);
 
-/* TODO: Make this common between this & vfp.h */
-static void
-vfp_store(struct vfpstate *state)
-{
-	__uint128_t *vfp_state;
-	uint64_t fpcr, fpsr;
-
-	vfp_state = state->vfp_regs;
-	__asm __volatile(
-	    "mrs	%0, fpcr		\n"
-	    "mrs	%1, fpsr		\n"
-	    "stp	q0,  q1,  [%2, #16 *  0]\n"
-	    "stp	q2,  q3,  [%2, #16 *  2]\n"
-	    "stp	q4,  q5,  [%2, #16 *  4]\n"
-	    "stp	q6,  q7,  [%2, #16 *  6]\n"
-	    "stp	q8,  q9,  [%2, #16 *  8]\n"
-	    "stp	q10, q11, [%2, #16 * 10]\n"
-	    "stp	q12, q13, [%2, #16 * 12]\n"
-	    "stp	q14, q15, [%2, #16 * 14]\n"
-	    "stp	q16, q17, [%2, #16 * 16]\n"
-	    "stp	q18, q19, [%2, #16 * 18]\n"
-	    "stp	q20, q21, [%2, #16 * 20]\n"
-	    "stp	q22, q23, [%2, #16 * 22]\n"
-	    "stp	q24, q25, [%2, #16 * 24]\n"
-	    "stp	q26, q27, [%2, #16 * 26]\n"
-	    "stp	q28, q29, [%2, #16 * 28]\n"
-	    "stp	q30, q31, [%2, #16 * 30]\n"
-	    : "=&r"(fpcr), "=&r"(fpsr) : "r"(vfp_state));
-
-	state->vfp_fpcr = fpcr;
-	state->vfp_fpsr = fpsr;
-}
-
-static void
-vfp_restore(struct vfpstate *state)
-{
-	__uint128_t *vfp_state;
-	uint64_t fpcr, fpsr;
-
-	vfp_state = state->vfp_regs;
-	fpcr = state->vfp_fpcr;
-	fpsr = state->vfp_fpsr;
-
-	__asm __volatile(
-	    "ldp	q0,  q1,  [%2, #16 *  0]\n"
-	    "ldp	q2,  q3,  [%2, #16 *  2]\n"
-	    "ldp	q4,  q5,  [%2, #16 *  4]\n"
-	    "ldp	q6,  q7,  [%2, #16 *  6]\n"
-	    "ldp	q8,  q9,  [%2, #16 *  8]\n"
-	    "ldp	q10, q11, [%2, #16 * 10]\n"
-	    "ldp	q12, q13, [%2, #16 * 12]\n"
-	    "ldp	q14, q15, [%2, #16 * 14]\n"
-	    "ldp	q16, q17, [%2, #16 * 16]\n"
-	    "ldp	q18, q19, [%2, #16 * 18]\n"
-	    "ldp	q20, q21, [%2, #16 * 20]\n"
-	    "ldp	q22, q23, [%2, #16 * 22]\n"
-	    "ldp	q24, q25, [%2, #16 * 24]\n"
-	    "ldp	q26, q27, [%2, #16 * 26]\n"
-	    "ldp	q28, q29, [%2, #16 * 28]\n"
-	    "ldp	q30, q31, [%2, #16 * 30]\n"
-	    "msr	fpcr, %0		\n"
-	    "msr	fpsr, %1		\n"
-	    : : "r"(fpcr), "r"(fpsr), "r"(vfp_state));
-}
-
 static void
 vmm_hyp_reg_store(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 {
@@ -115,8 +50,6 @@ vmm_hyp_reg_store(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 
 	/* Store the guest VFP registers */
 	if (guest) {
-		vfp_store(&hypctx->vfpstate);
-
 		/* Store the timer registers */
 		hypctx->vtimer_cpu.cntkctl_el1 = READ_SPECIALREG(cntkctl_el1);
 		hypctx->vtimer_cpu.virt_timer.cntx_cval_el0 =
@@ -125,19 +58,20 @@ vmm_hyp_reg_store(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 		    READ_SPECIALREG(cntv_ctl_el0);
 
 		/* Store the GICv3 registers */
-		hypctx->vgic_cpu_if.ich_eisr_el2 =
+		hypctx->vgic_v3_regs.ich_eisr_el2 =
 		    READ_SPECIALREG(ich_eisr_el2);
-		hypctx->vgic_cpu_if.ich_elrsr_el2 =
+		hypctx->vgic_v3_regs.ich_elrsr_el2 =
 		    READ_SPECIALREG(ich_elrsr_el2);
-		hypctx->vgic_cpu_if.ich_hcr_el2 = READ_SPECIALREG(ich_hcr_el2);
-		hypctx->vgic_cpu_if.ich_misr_el2 =
+		hypctx->vgic_v3_regs.ich_hcr_el2 =
+		    READ_SPECIALREG(ich_hcr_el2);
+		hypctx->vgic_v3_regs.ich_misr_el2 =
 		    READ_SPECIALREG(ich_misr_el2);
-		hypctx->vgic_cpu_if.ich_vmcr_el2 =
+		hypctx->vgic_v3_regs.ich_vmcr_el2 =
 		    READ_SPECIALREG(ich_vmcr_el2);
-		switch(hypctx->vgic_cpu_if.ich_lr_num - 1) {
+		switch(hypctx->vgic_v3_regs.ich_lr_num - 1) {
 #define	STORE_LR(x)					\
 	case x:						\
-		hypctx->vgic_cpu_if.ich_lr_el2[x] =	\
+		hypctx->vgic_v3_regs.ich_lr_el2[x] =	\
 		    READ_SPECIALREG(ich_lr ## x ##_el2)
 		STORE_LR(15);
 		STORE_LR(14);
@@ -159,12 +93,12 @@ vmm_hyp_reg_store(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 #undef STORE_LR
 		}
 
-		switch(hypctx->vgic_cpu_if.ich_apr_num - 1) {
+		switch(hypctx->vgic_v3_regs.ich_apr_num - 1) {
 #define	STORE_APR(x)						\
 	case x:							\
-		hypctx->vgic_cpu_if.ich_ap0r_el2[x] =		\
+		hypctx->vgic_v3_regs.ich_ap0r_el2[x] =		\
 		    READ_SPECIALREG(ich_ap0r ## x ##_el2);	\
-		hypctx->vgic_cpu_if.ich_ap1r_el2[x] =		\
+		hypctx->vgic_v3_regs.ich_ap1r_el2[x] =		\
 		    READ_SPECIALREG(ich_ap1r ## x ##_el2)
 		STORE_APR(3);
 		STORE_APR(2);
@@ -485,14 +419,14 @@ vmm_hyp_reg_restore(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 		WRITE_SPECIALREG(cntvoff_el2, hyp->vtimer.cntvoff_el2);
 
 		/* Load the GICv3 registers */
-		WRITE_SPECIALREG(ich_hcr_el2, hypctx->vgic_cpu_if.ich_hcr_el2);
+		WRITE_SPECIALREG(ich_hcr_el2, hypctx->vgic_v3_regs.ich_hcr_el2);
 		WRITE_SPECIALREG(ich_vmcr_el2,
-		    hypctx->vgic_cpu_if.ich_vmcr_el2);
-		switch(hypctx->vgic_cpu_if.ich_lr_num - 1) {
+		    hypctx->vgic_v3_regs.ich_vmcr_el2);
+		switch(hypctx->vgic_v3_regs.ich_lr_num - 1) {
 #define	LOAD_LR(x)					\
 	case x:						\
 		WRITE_SPECIALREG(ich_lr ## x ##_el2,	\
-		    hypctx->vgic_cpu_if.ich_lr_el2[x])
+		    hypctx->vgic_v3_regs.ich_lr_el2[x])
 		LOAD_LR(15);
 		LOAD_LR(14);
 		LOAD_LR(13);
@@ -513,13 +447,13 @@ vmm_hyp_reg_restore(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 #undef LOAD_LR
 		}
 
-		switch(hypctx->vgic_cpu_if.ich_apr_num - 1) {
+		switch(hypctx->vgic_v3_regs.ich_apr_num - 1) {
 #define	LOAD_APR(x)						\
 	case x:							\
 		WRITE_SPECIALREG(ich_ap0r ## x ##_el2,		\
-		    hypctx->vgic_cpu_if.ich_ap0r_el2[x]);		\
+		    hypctx->vgic_v3_regs.ich_ap0r_el2[x]);		\
 		WRITE_SPECIALREG(ich_ap1r ## x ##_el2,		\
-		    hypctx->vgic_cpu_if.ich_ap1r_el2[x])
+		    hypctx->vgic_v3_regs.ich_ap1r_el2[x])
 		LOAD_APR(3);
 		LOAD_APR(2);
 		LOAD_APR(1);
@@ -527,17 +461,13 @@ vmm_hyp_reg_restore(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 		LOAD_APR(0);
 #undef LOAD_APR
 		}
-
-		/* Load the guest VFP registers */
-		vfp_restore(&hypctx->vfpstate);
 	}
 }
 
 static uint64_t
-vmm_hyp_call_guest(struct hyp *hyp, int vcpu)
+vmm_hyp_call_guest(struct hyp *hyp, struct hypctx *hypctx)
 {
 	struct hypctx host_hypctx;
-	struct hypctx *hypctx;
 	uint64_t cntvoff_el2;
 	uint64_t ich_hcr_el2, ich_vmcr_el2, cnthctl_el2, cntkctl_el1;
 	uint64_t ret;
@@ -545,9 +475,6 @@ vmm_hyp_call_guest(struct hyp *hyp, int vcpu)
 	bool hpfar_valid;
 
 	vmm_hyp_reg_store(&host_hypctx, NULL, false);
-
-	/* TODO: Check cpuid is valid */
-	hypctx = &hyp->ctx[vcpu];
 
 	/* Save the host special registers */
 	cnthctl_el2 = READ_SPECIALREG(cnthctl_el2);
@@ -798,7 +725,8 @@ vmm_hyp_enter(uint64_t handle, uint64_t x1, uint64_t x2, uint64_t x3,
 	switch (handle) {
 	case HYP_ENTER_GUEST:
 		do {
-			ret = vmm_hyp_call_guest((struct hyp *)x1, x2);
+			ret = vmm_hyp_call_guest((struct hyp *)x1,
+			    (struct hypctx *)x2);
 		} while (ret == EXCP_TYPE_REENTER);
 		return (ret);
 	case HYP_READ_REGISTER:

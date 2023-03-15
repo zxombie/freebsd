@@ -103,11 +103,13 @@ enum vm_reg_name {
 
 #define	VM_MAX_NAMELEN	32
 
+struct vcpu;
 struct vm;
 struct vm_exception;
 struct vm_exit;
 struct vm_run;
 struct vm_object;
+struct vm_vgic_descr;
 struct pmap;
 
 struct vm_eventinfo {
@@ -116,48 +118,10 @@ struct vm_eventinfo {
 	int	*iptr;		/* reqidle cookie */
 };
 
-typedef int	(*vmm_init_func_t)(int ipinum);
-typedef int	(*vmm_cleanup_func_t)(void);
-typedef void	(*vmm_resume_func_t)(void);
-typedef void *	(*vmi_init_func_t)(struct vm *vm, struct pmap *pmap);
-typedef int	(*vmi_run_func_t)(void *vmi, int vcpu, register_t rip,
-				  struct pmap *pmap, struct vm_eventinfo *evinfo);
-typedef void	(*vmi_cleanup_func_t)(void *vmi);
-typedef void	(*vmi_mmap_set_func_t)(void *arg, vm_offset_t va,
-				       vm_offset_t pa, size_t len,
-				       vm_prot_t prot);
-typedef vm_paddr_t (*vmi_mmap_get_func_t)(void *arg, vm_offset_t va);
-typedef int	(*vmi_get_register_t)(void *vmi, int vcpu, int num,
-				      uint64_t *retval);
-typedef int	(*vmi_set_register_t)(void *vmi, int vcpu, int num,
-				      uint64_t val);
-typedef int	(*vmi_get_cap_t)(void *vmi, int vcpu, int num, int *retval);
-typedef int	(*vmi_set_cap_t)(void *vmi, int vcpu, int num, int val);
-typedef struct vmspace * (*vmi_vmspace_alloc)(vm_offset_t min, vm_offset_t max);
-typedef void	(*vmi_vmspace_free)(struct vmspace *vmspace);
-typedef struct vlapic * (*vmi_vlapic_init)(void *vmi, int vcpu);
-typedef void	(*vmi_vlapic_cleanup)(void *vmi, struct vlapic *vlapic);
-
-struct vmm_ops {
-	/* Module-wide functions */
-	vmm_init_func_t		init;
-	vmm_cleanup_func_t	cleanup;
-	vmm_resume_func_t	resume;
-	/* VM specific functions */
-	vmi_init_func_t		vminit;
-	vmi_run_func_t		vmrun;
-	vmi_cleanup_func_t	vmcleanup;
-	vmi_get_register_t	vmgetreg;
-	vmi_set_register_t	vmsetreg;
-	vmi_get_cap_t		vmgetcap;
-	vmi_set_cap_t		vmsetcap;
-	vmi_vmspace_alloc	vmspace_alloc;
-	vmi_vmspace_free	vmspace_free;
-};
-
-extern struct vmm_ops vmm_ops_arm;
-
 int vm_create(const char *name, struct vm **retvm);
+struct vcpu *vm_alloc_vcpu(struct vm *vm, int vcpuid);
+void vm_slock_vcpus(struct vm *vm);
+void vm_unlock_vcpus(struct vm *vm);
 void vm_destroy(struct vm *vm);
 int vm_reinit(struct vm *vm);
 const char *vm_name(struct vm *vm);
@@ -165,6 +129,9 @@ const char *vm_name(struct vm *vm);
 /*
  * APIs that modify the guest memory map require all vcpus to be frozen.
  */
+void vm_slock_memsegs(struct vm *vm);
+void vm_xlock_memsegs(struct vm *vm);
+void vm_unlock_memsegs(struct vm *vm);
 int vm_mmap_memseg(struct vm *vm, vm_paddr_t gpa, int segid, vm_ooffset_t off,
     size_t len, int prot, int flags);
 int vm_alloc_memseg(struct vm *vm, int ident, size_t len, bool sysmem);
@@ -185,62 +152,55 @@ int vm_mmap_getnext(struct vm *vm, vm_paddr_t *gpa, int *segid,
 int vm_get_memseg(struct vm *vm, int ident, size_t *len, bool *sysmem,
     struct vm_object **objptr);
 vm_paddr_t vmm_sysmem_maxaddr(struct vm *vm);
-void *vm_gpa_hold(struct vm *, int vcpuid, vm_paddr_t gpa, size_t len,
+void *vm_gpa_hold(struct vcpu *vcpu, vm_paddr_t gpa, size_t len,
+    int prot, void **cookie);
+void *vm_gpa_hold_global(struct vm *vm, vm_paddr_t gpa, size_t len,
     int prot, void **cookie);
 void vm_gpa_release(void *cookie);
-bool vm_mem_allocated(struct vm *vm, int vcpuid, vm_paddr_t gpa);
+bool vm_mem_allocated(struct vcpu *vcpu, vm_paddr_t gpa);
+
+int vm_gla2gpa_nofault(struct vcpu *vcpu, uint64_t gla, int prot,
+    uint64_t *gpa, int *is_fault);
 
 uint16_t vm_get_maxcpus(struct vm *vm);
 void vm_get_topology(struct vm *vm, uint16_t *sockets, uint16_t *cores,
     uint16_t *threads, uint16_t *maxcpus);
 int vm_set_topology(struct vm *vm, uint16_t sockets, uint16_t cores,
     uint16_t threads, uint16_t maxcpus);
-int vm_get_register(struct vm *vm, int vcpu, int reg, uint64_t *retval);
-int vm_set_register(struct vm *vm, int vcpu, int reg, uint64_t val);
-int vm_run(struct vm *vm, struct vm_run *vmrun);
+int vm_get_register(struct vcpu *vcpu, int reg, uint64_t *retval);
+int vm_set_register(struct vcpu *vcpu, int reg, uint64_t val);
+int vm_run(struct vcpu *vcpu, struct vm_exit *vme_user);
 int vm_suspend(struct vm *vm, enum vm_suspend_how how);
 void* vm_get_cookie(struct vm *vm);
-int vm_get_capability(struct vm *vm, int vcpu, int type, int *val);
-int vm_set_capability(struct vm *vm, int vcpu, int type, int val);
-int vm_activate_cpu(struct vm *vm, int vcpu);
-int vm_suspend_cpu(struct vm *vm, int vcpu);
-int vm_resume_cpu(struct vm *vm, int vcpu);
-int vm_attach_vgic(struct vm *vm, uint64_t dist_start, size_t dist_size,
-    uint64_t redist_start, size_t redist_size);
+int vcpu_vcpuid(struct vcpu *vcpu);
+void *vcpu_get_cookie(struct vcpu *vcpu);
+struct vm *vcpu_vm(struct vcpu *vcpu);
+struct vcpu *vm_vcpu(struct vm *vm, int cpu);
+int vm_get_capability(struct vcpu *vcpu, int type, int *val);
+int vm_set_capability(struct vcpu *vcpu, int type, int val);
+int vm_activate_cpu(struct vcpu *vcpu);
+int vm_suspend_cpu(struct vm *vm, struct vcpu *vcpu);
+int vm_resume_cpu(struct vm *vm, struct vcpu *vcpu);
+int vm_inject_exception(struct vcpu *vcpu, uint64_t esr, uint64_t far);
+int vm_attach_vgic(struct vm *vm, struct vm_vgic_descr *descr);
 int vm_assert_irq(struct vm *vm, uint32_t irq);
 int vm_deassert_irq(struct vm *vm, uint32_t irq);
 int vm_raise_msi(struct vm *vm, uint64_t msg, uint64_t addr, int bus, int slot,
     int func);
-struct vm_exit *vm_exitinfo(struct vm *vm, int vcpuid);
-void vm_exit_suspended(struct vm *vm, int vcpuid, uint64_t rip);
-void vm_exit_rendezvous(struct vm *vm, int vcpuid, uint64_t rip);
-void vm_exit_astpending(struct vm *vm, int vcpuid, uint64_t rip);
+struct vm_exit *vm_exitinfo(struct vcpu *vcpu);
+void vm_exit_suspended(struct vcpu *vcpu, uint64_t rip);
+void vm_exit_debug(struct vcpu *vcpu, uint64_t rip);
+void vm_exit_rendezvous(struct vcpu *vcpu, uint64_t rip);
+void vm_exit_astpending(struct vcpu *vcpu, uint64_t rip);
 
 #ifdef _SYS__CPUSET_H_
-/*
- * Rendezvous all vcpus specified in 'dest' and execute 'func(arg)'.
- * The rendezvous 'func(arg)' is not allowed to do anything that will
- * cause the thread to be put to sleep.
- *
- * If the rendezvous is being initiated from a vcpu context then the
- * 'vcpuid' must refer to that vcpu, otherwise it should be set to -1.
- *
- * The caller cannot hold any locks when initiating the rendezvous.
- *
- * The implementation of this API may cause vcpus other than those specified
- * by 'dest' to be stalled. The caller should not rely on any vcpus making
- * forward progress when the rendezvous is in progress.
- */
-typedef void (*vm_rendezvous_func_t)(struct vm *vm, int vcpuid, void *arg);
-void vm_smp_rendezvous(struct vm *vm, int vcpuid, cpuset_t dest,
-    vm_rendezvous_func_t func, void *arg);
 cpuset_t vm_active_cpus(struct vm *vm);
 cpuset_t vm_debug_cpus(struct vm *vm);
 cpuset_t vm_suspended_cpus(struct vm *vm);
 #endif	/* _SYS__CPUSET_H_ */
 
 static __inline bool
-virt_enabled()
+virt_enabled(void)
 {
 
 	return (has_hyp());
@@ -260,6 +220,8 @@ vcpu_suspended(struct vm_eventinfo *info)
 	return (*info->sptr);
 }
 
+int vcpu_debugged(struct vcpu *vcpu);
+
 enum vcpu_state {
 	VCPU_IDLE,
 	VCPU_FROZEN,
@@ -267,19 +229,18 @@ enum vcpu_state {
 	VCPU_SLEEPING,
 };
 
-int vcpu_set_state(struct vm *vm, int vcpu, enum vcpu_state state,
-    bool from_idle);
-enum vcpu_state vcpu_get_state(struct vm *vm, int vcpu, int *hostcpu);
+int vcpu_set_state(struct vcpu *vcpu, enum vcpu_state state, bool from_idle);
+enum vcpu_state vcpu_get_state(struct vcpu *vcpu, int *hostcpu);
 
 static int __inline
-vcpu_is_running(struct vm *vm, int vcpu, int *hostcpu)
+vcpu_is_running(struct vcpu *vcpu, int *hostcpu)
 {
-	return (vcpu_get_state(vm, vcpu, hostcpu) == VCPU_RUNNING);
+	return (vcpu_get_state(vcpu, hostcpu) == VCPU_RUNNING);
 }
 
 #ifdef _SYS_PROC_H_
 static int __inline
-vcpu_should_yield(struct vm *vm, int vcpu)
+vcpu_should_yield(struct vcpu *vcpu)
 {
 	struct thread *td;
 
@@ -288,35 +249,8 @@ vcpu_should_yield(struct vm *vm, int vcpu)
 }
 #endif
 
-void *vcpu_stats(struct vm *vm, int vcpu);
-void vcpu_notify_event(struct vm *vm, int vcpuid, bool lapic_intr);
-
-/*
- * This function is called after a VM-exit that occurred during exception or
- * interrupt delivery through the IDT. The format of 'intinfo' is described
- * in Figure 15-1, "EXITINTINFO for All Intercepts", APM, Vol 2.
- *
- * If a VM-exit handler completes the event delivery successfully then it
- * should call vm_exit_intinfo() to extinguish the pending event. For e.g.,
- * if the task switch emulation is triggered via a task gate then it should
- * call this function with 'intinfo=0' to indicate that the external event
- * is not pending anymore.
- *
- * Return value is 0 on success and non-zero on failure.
- */
-int vm_exit_intinfo(struct vm *vm, int vcpuid, uint64_t intinfo);
-
-/*
- * This function is called before every VM-entry to retrieve a pending
- * event that should be injected into the guest. This function combines
- * nested events into a double or triple fault.
- *
- * Returns 0 if there are no events that need to be injected into the guest
- * and non-zero otherwise.
- */
-int vm_entry_intinfo(struct vm *vm, int vcpuid, uint64_t *info);
-
-int vm_get_intinfo(struct vm *vm, int vcpuid, uint64_t *info1, uint64_t *info2);
+void *vcpu_stats(struct vcpu *vcpu);
+void vcpu_notify_event(struct vcpu *vcpu, bool lapic_intr);
 
 enum vm_reg_name vm_segment_name(int seg_encoding);
 
@@ -327,11 +261,7 @@ struct vm_copyinfo {
 	void		*cookie;
 };
 
-int vcpu_trace_exceptions(struct vm *vm, int vcpuid);
-
 #endif	/* _KERNEL */
-
-#define	VM_MAXCPU	4
 
 #define	VM_DIR_READ	0
 #define	VM_DIR_WRITE	1
@@ -379,6 +309,7 @@ enum vm_exitcode {
 	VM_EXITCODE_WFI,
 	VM_EXITCODE_PAGING,
 	VM_EXITCODE_SMCCC,
+	VM_EXITCODE_DEBUG,
 	VM_EXITCODE_MAX
 };
 
@@ -407,7 +338,8 @@ struct vm_exit {
 		 */
 		struct {
 			uint32_t	exception_nr;
-			uint32_t	esr_el2;	/* Exception Syndrome Register */
+			uint32_t	pad;
+			uint64_t	esr_el2;	/* Exception Syndrome Register */
 			uint64_t	far_el2;	/* Fault Address Register */
 			uint64_t	hpfar_el2;	/* Hypervisor IPA Fault Address Register */
 		} hyp;
@@ -431,7 +363,7 @@ struct vm_exit {
 		 */
 		struct {
 			uint64_t	func_id;
-			uint64_t	args[3];
+			uint64_t	args[7];
 		} smccc_call;
 
 		struct {

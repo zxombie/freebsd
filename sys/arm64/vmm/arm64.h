@@ -27,13 +27,15 @@
 #define _VMM_ARM64_H_
 
 #include <machine/reg.h>
-#include <machine/vfp.h>
 #include <machine/hypervisor.h>
 #include <machine/pcpu.h>
 
 #include "mmu.h"
 #include "io/vgic_v3.h"
 #include "io/vtimer.h"
+
+struct vgic_v3;
+struct vgic_v3_cpu;
 
 struct hypctx {
 	struct trapframe tf;
@@ -91,31 +93,62 @@ struct hypctx {
 	uint64_t	mdcr_el2;	/* Monitor Debug Configuration Register */
 	uint64_t	vpidr_el2;	/* Virtualization Processor ID Register */
 	uint64_t	vmpidr_el2;	/* Virtualization Multiprocessor ID Register */
-	uint32_t	vcpu;
+	uint64_t	el2_addr;	/* The address of this in el2 space */
 	struct hyp	*hyp;
+	struct vcpu	*vcpu;
 	struct {
 		uint64_t	far_el2;	/* Fault Address Register */
 		uint64_t	hpfar_el2;	/* Hypervisor IPA Fault Address Register */
 	} exit_info;
 
 	struct vtimer_cpu 	vtimer_cpu;
-	struct vgic_v3_cpu_if	vgic_cpu_if;
-	struct vgic_v3_redist	vgic_redist;
-#ifdef VFP
-	struct vfpstate	vfpstate;
-#endif
+
+	struct vgic_v3_regs	vgic_v3_regs;
+	struct vgic_v3_cpu	*vgic_cpu;
+	bool has_exception;
 };
 
 struct hyp {
-	struct hypctx	ctx[VM_MAXCPU];
-	struct vgic_v3_dist vgic_dist;
 	struct vm	*vm;
 	struct vtimer	vtimer;
 	uint64_t	vmid_generation;
 	uint64_t	vttbr_el2;
 	uint64_t	el2_addr;	/* The address of this in el2 space */
 	bool		vgic_attached;
+	struct vgic_v3	*vgic;
+	struct hypctx	*ctx[];
 };
+
+#define	DEFINE_VMMOPS_IFUNC(ret_type, opname, args)			\
+	ret_type vmmops_##opname args;
+
+DEFINE_VMMOPS_IFUNC(int, modinit, (int ipinum))
+DEFINE_VMMOPS_IFUNC(int, modcleanup, (void))
+DEFINE_VMMOPS_IFUNC(void *, init, (struct vm *vm, struct pmap *pmap))
+DEFINE_VMMOPS_IFUNC(void, gla2gpa, (void *vcpui, uint64_t gla, int prot,
+    uint64_t *gpa, int *is_fault))
+DEFINE_VMMOPS_IFUNC(int, run, (void *vcpui, register_t rip, struct pmap *pmap,
+    struct vm_eventinfo *info))
+DEFINE_VMMOPS_IFUNC(void, cleanup, (void *vmi))
+DEFINE_VMMOPS_IFUNC(void *, vcpu_init, (void *vmi, struct vcpu *vcpu,
+    int vcpu_id))
+DEFINE_VMMOPS_IFUNC(void, vcpu_cleanup, (void *vcpui))
+DEFINE_VMMOPS_IFUNC(int, exception, (void *vcpui, uint64_t esr, uint64_t far))
+DEFINE_VMMOPS_IFUNC(int, getreg, (void *vcpui, int num, uint64_t *retval))
+DEFINE_VMMOPS_IFUNC(int, setreg, (void *vcpui, int num, uint64_t val))
+DEFINE_VMMOPS_IFUNC(int, getcap, (void *vcpui, int num, int *retval))
+DEFINE_VMMOPS_IFUNC(int, setcap, (void *vcpui, int num, int val))
+DEFINE_VMMOPS_IFUNC(struct vmspace *, vmspace_alloc, (vm_offset_t min,
+    vm_offset_t max))
+DEFINE_VMMOPS_IFUNC(void, vmspace_free, (struct vmspace *vmspace))
+#ifdef notyet
+#ifdef BHYVE_SNAPSHOT
+DEFINE_VMMOPS_IFUNC(int, snapshot, (void *vmi, struct vm_snapshot_meta *meta))
+DEFINE_VMMOPS_IFUNC(int, vcpu_snapshot, (void *vcpui,
+    struct vm_snapshot_meta *meta))
+DEFINE_VMMOPS_IFUNC(int, restore_tsc, (void *vcpui, uint64_t now))
+#endif
+#endif
 
 uint64_t	vmm_call_hyp(uint64_t, ...);
 void 		vmm_cleanup(void *hyp_stub_vectors);

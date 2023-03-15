@@ -21,17 +21,21 @@ SRCS+=	vmm.c		\
 .if ${MACHINE_CPUARCH} == "aarch64"
 # TODO: Add the new EL2 code
 SRCS+=	vmm_arm64.c \
-	vmm_psci.c \
 	vmm_reset.c \
 	vmm_call.S \
 	vmm_mmu.c \
 	vmm_hyp_el2.S
 
 .PATH: ${SRCTOP}/sys/${MACHINE}/vmm/io
-SRCS+=	vgic_v3.c \
+SRCS+=	vgic.c \
+	vgic_if.h \
+	vgic_if.c \
+	vgic_v3.c \
 	vtimer.c
 
-CLEANFILES+=	vmm_hyp_exception.o vmm_hyp.o vmm_hyp_blob.elf.full
+SRCS+=	vmm_hyp_exception.S vmm_hyp.c
+
+CLEANFILES+=	vmm_hyp_blob.elf.full
 CLEANFILES+=	vmm_hyp_blob.elf vmm_hyp_blob.bin
 
 CFLAGS.vmm_hyp_exception.S += -fpie

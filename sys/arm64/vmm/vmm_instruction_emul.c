@@ -51,23 +51,23 @@
 #include <machine/vmm_instruction_emul.h>
 
 int
-vmm_emulate_instruction(void *vm, int vcpuid, uint64_t gpa, struct vie *vie,
-    struct vm_guest_paging *paging, mem_region_read_t memread,
+vmm_emulate_instruction(VCPU_DECL, uint64_t gpa, struct vie *vie,
+    struct vm_guest_paging *paging __unused, mem_region_read_t memread,
     mem_region_write_t memwrite, void *memarg)
 {
 	uint64_t val;
 	int error;
 
 	if (vie->dir == VM_DIR_READ) {
-		error = memread(vm, vcpuid, gpa, &val, vie->access_size, memarg);
+		error = memread(VCPU_ARGS, gpa, &val, vie->access_size, memarg);
 		if (error)
 			goto out;
-		error = vm_set_register(vm, vcpuid, vie->reg, val);
+		error = vm_set_register(VCPU_ARGS, vie->reg, val);
 	} else {
-		error = vm_get_register(vm, vcpuid, vie->reg, &val);
+		error = vm_get_register(VCPU_ARGS, vie->reg, &val);
 		if (error)
 			goto out;
-		error = memwrite(vm, vcpuid, gpa, val, vie->access_size, memarg);
+		error = memwrite(VCPU_ARGS, gpa, val, vie->access_size, memarg);
 	}
 
 out:
@@ -75,22 +75,22 @@ out:
 }
 
 int
-vmm_emulate_register(void *vm, int vcpuid, struct vre *vre, reg_read_t regread,
+vmm_emulate_register(VCPU_DECL, struct vre *vre, reg_read_t regread,
     reg_write_t regwrite, void *regarg)
 {
 	uint64_t val;
 	int error;
 
 	if (vre->dir == VM_DIR_READ) {
-		error = regread(vm, vcpuid, &val, regarg);
+		error = regread(VCPU_ARGS, &val, regarg);
 		if (error)
 			goto out;
-		error = vm_set_register(vm, vcpuid, vre->reg, val);
+		error = vm_set_register(VCPU_ARGS, vre->reg, val);
 	} else {
-		error = vm_get_register(vm, vcpuid, vre->reg, &val);
+		error = vm_get_register(VCPU_ARGS, vre->reg, &val);
 		if (error)
 			goto out;
-		error = regwrite(vm, vcpuid, val, regarg);
+		error = regwrite(VCPU_ARGS, val, regarg);
 	}
 
 out:

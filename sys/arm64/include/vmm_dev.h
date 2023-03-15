@@ -71,10 +71,8 @@ struct vm_run {
 
 struct vm_exception {
 	int		cpuid;
-	int		vector;
-	uint32_t	error_code;
-	int		error_code_valid;
-	int		restart_instruction;
+	uint64_t	esr;
+	uint64_t	far;
 };
 
 struct vm_msi {
@@ -130,11 +128,21 @@ struct vm_cpuset {
 #define	VM_SUSPENDED_CPUS	1
 #define	VM_DEBUG_CPUS		2
 
-struct vm_attach_vgic {
-	uint64_t	dist_start;
-	size_t		dist_size;
-	uint64_t	redist_start;
-	size_t		redist_size;
+struct vm_vgic_version {
+	u_int version;
+	u_int flags;
+};
+
+struct vm_vgic_descr {
+	struct vm_vgic_version ver;
+	union {
+		struct {
+			uint64_t dist_start;
+			uint64_t dist_size;
+			uint64_t redist_start;
+			uint64_t redist_size;
+		} v3_regs;
+	};
 };
 
 struct vm_irq {
@@ -159,7 +167,7 @@ enum {
 
 	/* memory apis */
 	IOCNUM_GET_GPA_PMAP = 12,
-	IOCNUM_GLA2GPA = 13,
+	IOCNUM_GLA2GPA_NOFAULT = 13,
 	IOCNUM_ALLOC_MEMSEG = 14,
 	IOCNUM_GET_MEMSEG = 15,
 	IOCNUM_MMAP_MEMSEG = 16,
@@ -183,6 +191,7 @@ enum {
 	IOCNUM_ASSERT_IRQ = 80,
 	IOCNUM_DEASSERT_IRQ = 81,
 	IOCNUM_RAISE_MSI = 82,
+	IOCNUM_INJECT_EXCEPTION = 83,
 
 	/* vm_cpuset */
 	IOCNUM_ACTIVATE_CPU = 90,
@@ -191,7 +200,8 @@ enum {
 	IOCNUM_RESUME_CPU = 93,
 
 	/* vm_attach_vgic */
-	IOCNUM_ATTACH_VGIC = 110,
+	IOCNUM_GET_VGIC_VERSION = 110,
+	IOCNUM_ATTACH_VGIC = 111,
 };
 
 #define	VM_RUN		\
@@ -230,12 +240,14 @@ enum {
 	_IOW('v', IOCNUM_DEASSERT_IRQ, struct vm_irq)
 #define VM_RAISE_MSI \
 	_IOW('v', IOCNUM_RAISE_MSI, struct vm_msi)
+#define	VM_INJECT_EXCEPTION	\
+	_IOW('v', IOCNUM_INJECT_EXCEPTION, struct vm_exception)
 #define VM_SET_TOPOLOGY \
 	_IOW('v', IOCNUM_SET_TOPOLOGY, struct vm_cpu_topology)
 #define VM_GET_TOPOLOGY \
 	_IOR('v', IOCNUM_GET_TOPOLOGY, struct vm_cpu_topology)
-#define	VM_GLA2GPA	\
-	_IOWR('v', IOCNUM_GLA2GPA, struct vm_gla2gpa)
+#define	VM_GLA2GPA_NOFAULT \
+	_IOWR('v', IOCNUM_GLA2GPA_NOFAULT, struct vm_gla2gpa)
 #define	VM_ACTIVATE_CPU	\
 	_IOW('v', IOCNUM_ACTIVATE_CPU, struct vm_activate_cpu)
 #define	VM_GET_CPUS	\
@@ -244,6 +256,8 @@ enum {
 	_IOW('v', IOCNUM_SUSPEND_CPU, struct vm_activate_cpu)
 #define	VM_RESUME_CPU \
 	_IOW('v', IOCNUM_RESUME_CPU, struct vm_activate_cpu)
+#define	VM_GET_VGIC_VERSION	\
+	_IOR('v', IOCNUM_GET_VGIC_VERSION, struct vm_vgic_version)
 #define	VM_ATTACH_VGIC	\
-	_IOW('v', IOCNUM_ATTACH_VGIC, struct vm_attach_vgic)
+	_IOW('v', IOCNUM_ATTACH_VGIC, struct vm_vgic_descr)
 #endif

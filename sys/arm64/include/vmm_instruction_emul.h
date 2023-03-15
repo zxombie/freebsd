@@ -28,18 +28,31 @@
 #define	_VMM_INSTRUCTION_EMUL_H_
 
 /*
+ * Allow for different arguments to identify vCPUs in userspace vs the
+ * kernel.  Eventually we should add struct vcpu in userland and
+ * always use the kernel arguments removing these macros.
+ */
+#ifdef _KERNEL
+#define	VCPU_DECL	struct vcpu *vcpu
+#define	VCPU_ARGS	vcpu
+#else
+#define	VCPU_DECL	void *vm, int vcpuid
+#define	VCPU_ARGS	vm, vcpuid
+#endif
+
+/*
  * Callback functions to read and write memory regions.
  */
-typedef int (*mem_region_read_t)(void *vm, int cpuid, uint64_t gpa,
+typedef int (*mem_region_read_t)(VCPU_DECL, uint64_t gpa,
 				 uint64_t *rval, int rsize, void *arg);
-typedef int (*mem_region_write_t)(void *vm, int cpuid, uint64_t gpa,
+typedef int (*mem_region_write_t)(VCPU_DECL, uint64_t gpa,
 				  uint64_t wval, int wsize, void *arg);
 
 /*
  * Callback functions to read and write registers.
  */
-typedef int (*reg_read_t)(void *vm, int cpuid, uint64_t *rval, void *arg);
-typedef int (*reg_write_t)(void *vm, int cpuid, uint64_t wval, void *arg);
+typedef int (*reg_read_t)(VCPU_DECL, uint64_t *rval, void *arg);
+typedef int (*reg_write_t)(VCPU_DECL, uint64_t wval, void *arg);
 
 /*
  * Emulate the decoded 'vie' instruction when it contains a memory operation.
@@ -52,7 +65,7 @@ typedef int (*reg_write_t)(void *vm, int cpuid, uint64_t wval, void *arg);
  * 'struct vmctx *' when called from user context.
  *
  */
-int vmm_emulate_instruction(void *vm, int cpuid, uint64_t gpa, struct vie *vie,
+int vmm_emulate_instruction(VCPU_DECL, uint64_t gpa, struct vie *vie,
     struct vm_guest_paging *paging, mem_region_read_t mrr,
     mem_region_write_t mrw, void *mrarg);
 
@@ -67,10 +80,14 @@ int vmm_emulate_instruction(void *vm, int cpuid, uint64_t gpa, struct vie *vie,
  * 'struct vmctx *' when called from user context.
  *
  */
-int vmm_emulate_register(void *vm, int vcpuid, struct vre *vre, reg_read_t regread,
+int vmm_emulate_register(VCPU_DECL, struct vre *vre, reg_read_t regread,
     reg_write_t regwrite, void *regarg);
 
 #ifdef _KERNEL
+void vm_register_reg_handler(struct vm *vm, uint64_t iss, uint64_t mask,
+    reg_read_t reg_read, reg_write_t reg_write, void *arg);
+void vm_deregister_reg_handler(struct vm *vm, uint64_t iss, uint64_t mask);
+
 void vm_register_inst_handler(struct vm *vm, uint64_t start, uint64_t size,
     mem_region_read_t mmio_read, mem_region_write_t mmio_write);
 void vm_deregister_inst_handler(struct vm *vm, uint64_t start, uint64_t size);

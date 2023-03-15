@@ -59,6 +59,7 @@
 #include "arm64.h"
 #include "hyp.h"
 #include "reset.h"
+#include "io/vgic.h"
 #include "io/vgic_v3.h"
 #include "io/vtimer.h"
 
@@ -75,7 +76,7 @@ CTASSERT((1ul << EL2_VIRT_BITS) >= HYP_VM_MAX_ADDRESS);
 #define	VMM_STACK_PAGES	4
 #define	VMM_STACK_SIZE	(VMM_STACK_PAGES * PAGE_SIZE)
 
-static int vmm_pmap_levels, vmm_virt_bits;
+static int vmm_pmap_levels, vmm_virt_bits, vmm_max_ipa_bits;
 
 /* Register values passed to arm_setup_vectors to set in the hypervisor */
 struct vmm_init_regs {
@@ -217,14 +218,13 @@ vmm_vtcr_el2_sl(u_int levels)
 #endif
 }
 
-static int
-arm_init(int ipinum)
+int
+vmmops_modinit(int ipinum)
 {
 	struct vmm_init_regs el2_regs;
 	vm_offset_t next_hyp_va;
 	vm_paddr_t vmm_base;
 	uint64_t id_aa64mmfr0_el1, pa_range_bits, pa_range_field;
-	uint64_t ich_vtr_el2;
 	uint64_t cnthctl_el2;
 	register_t daif;
 	int cpu, i;
@@ -236,7 +236,7 @@ arm_init(int ipinum)
 	}
 
 	if (!vgic_present()) {
-		printf("arm_init: No GICv3 found\n");
+		printf("arm_init: No vgic found\n");
 		return (ENODEV);
 	}
 
@@ -324,6 +324,31 @@ arm_init(int ipinum)
 	el2_regs.tcr_el2 |= TCR_EL2_SH0_IS;
 #endif
 
+	switch (el2_regs.tcr_el2 & TCR_EL2_PS_MASK) {
+	case TCR_EL2_PS_32BITS:
+		vmm_max_ipa_bits = 32;
+		break;
+	case TCR_EL2_PS_36BITS:
+		vmm_max_ipa_bits = 36;
+		break;
+	case TCR_EL2_PS_40BITS:
+		vmm_max_ipa_bits = 40;
+		break;
+	case TCR_EL2_PS_42BITS:
+		vmm_max_ipa_bits = 42;
+		break;
+	case TCR_EL2_PS_44BITS:
+		vmm_max_ipa_bits = 44;
+		break;
+	case TCR_EL2_PS_48BITS:
+		vmm_max_ipa_bits = 48;
+		break;
+	case TCR_EL2_PS_52BITS:
+	default:
+		vmm_max_ipa_bits = 52;
+		break;
+	}
+
 	/*
 	 * Configure the Stage 2 translation control register:
 	 *
@@ -387,18 +412,17 @@ arm_init(int ipinum)
 
 
 	daif = intr_disable();
-	ich_vtr_el2 = vmm_call_hyp(HYP_READ_REGISTER, HYP_REG_ICH_VTR);
 	cnthctl_el2 = vmm_call_hyp(HYP_READ_REGISTER, HYP_REG_CNTHCTL);
 	intr_restore(daif);
 
-	vgic_v3_init(ich_vtr_el2);
+	vgic_init();
 	vtimer_init(cnthctl_el2);
 
 	return (0);
 }
 
-static int
-arm_cleanup(void)
+int
+vmmops_modcleanup(void)
 {
 	int cpu;
 
@@ -424,42 +448,31 @@ arm_cleanup(void)
 	return (0);
 }
 
-static void *
-arm_vminit(struct vm *vm, pmap_t pmap)
+void *
+vmmops_init(struct vm *vm, pmap_t pmap)
 {
 	struct hyp *hyp;
-	struct hypctx *hypctx;
 	vmem_addr_t vm_addr;
 	vm_size_t size;
-	bool last_vcpu, rv __diagused;
-	int err __diagused, i, maxcpus;
+	bool rv __diagused;
+	int err __diagused;
 
+	/*
+	 * Allocate space for the common hyp struct and
+	 * a hypctx pointer per vcpu.
+	 */
+	size = sizeof(struct hyp) +
+	    sizeof(struct hypctx *) * vm_get_maxcpus(vm);
 	/* Ensure this is the only data on the page */
-	size = roundup2(sizeof(struct hyp), PAGE_SIZE);
-	hyp = malloc(size, M_HYP, M_WAITOK | M_ZERO);
+	size = roundup2(size, PAGE_SIZE);
+	hyp = malloc_aligned(size, PAGE_SIZE, M_HYP, M_WAITOK | M_ZERO);
 	MPASS(((vm_offset_t)hyp & PAGE_MASK) == 0);
 
 	hyp->vm = vm;
 	hyp->vgic_attached = false;
 
-	maxcpus = vm_get_maxcpus(vm);
-	for (i = 0; i < maxcpus; i++) {
-		hypctx = &hyp->ctx[i];
-		hypctx->vcpu = i;
-		hypctx->hyp = hyp;
-
-		reset_vm_el01_regs(hypctx);
-		reset_vm_el2_regs(hypctx);
-	}
-
 	vtimer_vminit(hyp);
-	vgic_v3_vminit(hyp);
-	for (i = 0; i < VM_MAXCPU; i++) {
-		hypctx = &hyp->ctx[i];
-		vtimer_cpuinit(hypctx);
-		last_vcpu = (i == VM_MAXCPU - 1);
-		vgic_v3_cpuinit(hypctx, last_vcpu);
-	}
+	vgic_vminit(hyp);
 
 	/* XXX: Can this fail? */
 	err = vmem_alloc(el2_mem_alloc, size, M_NEXTFIT | M_WAITOK,
@@ -475,6 +488,54 @@ arm_vminit(struct vm *vm, pmap_t pmap)
 	return (hyp);
 }
 
+void *
+vmmops_vcpu_init(void *vmi, struct vcpu *vcpu1, int vcpuid)
+{
+	struct hyp *hyp = vmi;
+	struct hypctx *hypctx;
+	vmem_addr_t vm_addr;
+	vm_size_t size;
+	bool rv __diagused;
+	int err __diagused;
+
+	/*
+	 * Allocate space for the common hyp struct and
+	 * a hypctx pointer per vcpu.
+	 */
+	size = sizeof(struct hypctx);
+	/* Ensure this is the only data on the page */
+	size = roundup2(size, PAGE_SIZE);
+	hypctx = malloc_aligned(size, PAGE_SIZE, M_HYP, M_WAITOK | M_ZERO);
+	MPASS(((vm_offset_t)hyp & PAGE_MASK) == 0);
+
+	KASSERT(vcpuid >= 0 && vcpuid < vm_get_maxcpus(hyp->vm),
+	    ("%s: Invalid vcpuid %d", __func__, vcpuid));
+	hyp->ctx[vcpuid] = hypctx;
+
+	hypctx->hyp = hyp;
+	hypctx->vcpu = vcpu1;
+
+	reset_vm_el01_regs(hypctx);
+	reset_vm_el2_regs(hypctx);
+
+	vtimer_cpuinit(hypctx);
+
+	vgic_cpuinit(hypctx);
+
+	/* XXX: Can this fail? */
+	err = vmem_alloc(el2_mem_alloc, size, M_NEXTFIT | M_WAITOK,
+	    &vm_addr);
+	MPASS(err == 0);
+	MPASS((vm_addr & PAGE_MASK) == 0);
+	hypctx->el2_addr = vm_addr;
+
+	rv = vmmpmap_enter(hypctx->el2_addr, size, vtophys(hypctx),
+	    VM_PROT_READ | VM_PROT_WRITE);
+	MPASS(rv);
+
+	return (hypctx);
+}
+
 static int
 arm_vmm_pinit(pmap_t pmap)
 {
@@ -483,14 +544,14 @@ arm_vmm_pinit(pmap_t pmap)
 	return (1);
 }
 
-static struct vmspace *
-arm_vmspace_alloc(vm_offset_t min, vm_offset_t max)
+struct vmspace *
+vmmops_vmspace_alloc(vm_offset_t min, vm_offset_t max)
 {
 	return (vmspace_alloc(min, max, arm_vmm_pinit));
 }
 
-static void
-arm_vmspace_free(struct vmspace *vmspace)
+void
+vmmops_vmspace_free(struct vmspace *vmspace)
 {
 
 	pmap_remove_pages(vmspace_pmap(vmspace));
@@ -601,9 +662,10 @@ get_vm_reg_name(uint32_t reg_nr, uint32_t mode __attribute__((unused)))
 static inline void
 arm64_print_hyp_regs(struct vm_exit *vme)
 {
-	printf("esr_el2:   0x%08x\n", vme->u.hyp.esr_el2);
+	printf("esr_el2:   0x%016lx\n", vme->u.hyp.esr_el2);
 	printf("far_el2:   0x%016lx\n", vme->u.hyp.far_el2);
 	printf("hpfar_el2: 0x%016lx\n", vme->u.hyp.hpfar_el2);
+	printf("elr_el2:   0x%016lx\n", vme->pc);
 }
 
 static void
@@ -658,15 +720,31 @@ arm64_gen_reg_emul_data(uint32_t esr_iss, struct vm_exit *vme_ret)
 	vre->reg = get_vm_reg_name(reg_num, UNUSED);
 }
 
+static void
+raise_data_insn_abort(struct hypctx *hypctx, uint64_t far, bool dabort, int fsc)
+{
+	uint64_t esr;
+
+	if ((hypctx->tf.tf_spsr & PSR_M_MASK) == PSR_M_EL0t)
+		esr = EXCP_INSN_ABORT_L << ESR_ELx_EC_SHIFT;
+	else
+		esr = EXCP_INSN_ABORT << ESR_ELx_EC_SHIFT;
+	/* Set the bit that changes from insn -> data abort */
+	if (dabort)
+		esr |= EXCP_DATA_ABORT_L << ESR_ELx_EC_SHIFT;
+	/* Set the IL bit if set by hardware */
+	esr |= hypctx->tf.tf_esr & ESR_ELx_IL;
+
+	vmmops_exception(hypctx, esr | fsc, far);
+}
+
 static int
-handle_el1_sync_excp(struct hyp *hyp, int vcpu, struct vm_exit *vme_ret,
+handle_el1_sync_excp(struct hypctx *hypctx, struct vm_exit *vme_ret,
     pmap_t pmap)
 {
-	struct hypctx *hypctx;
 	uint64_t gpa;
 	uint32_t esr_ec, esr_iss;
 
-	hypctx = &hyp->ctx[vcpu];
 	esr_ec = ESR_ELx_EXCEPTION(hypctx->tf.tf_esr);
 	esr_iss = hypctx->tf.tf_esr & ESR_ELx_ISS_MASK;
 
@@ -703,22 +781,36 @@ handle_el1_sync_excp(struct hyp *hyp, int vcpu, struct vm_exit *vme_ret,
 		case ISS_DATA_DFSC_PF_L1:
 		case ISS_DATA_DFSC_PF_L2:
 		case ISS_DATA_DFSC_PF_L3:
-			hypctx = &hyp->ctx[vcpu];
 			gpa = HPFAR_EL2_FIPA_ADDR(hypctx->exit_info.hpfar_el2);
-			if (vm_mem_allocated(hyp->vm, vcpu, gpa)) {
+			/* Check the IPA is valid */
+			if (gpa >= (1ul << vmm_max_ipa_bits)) {
+				raise_data_insn_abort(hypctx,
+				    hypctx->exit_info.far_el2,
+				    esr_ec == EXCP_DATA_ABORT_L,
+				    ISS_DATA_DFSC_ASF_L0);
+				vme_ret->inst_length = 0;
+				return (HANDLED);
+			}
+
+			if (vm_mem_allocated(hypctx->vcpu, gpa)) {
 				vme_ret->exitcode = VM_EXITCODE_PAGING;
 				vme_ret->inst_length = 0;
 				vme_ret->u.paging.esr = hypctx->tf.tf_esr;
 				vme_ret->u.paging.gpa = gpa;
-			} else if (esr_ec == EXCP_DATA_ABORT_L) {
-				arm64_gen_inst_emul_data(&hyp->ctx[vcpu],
-				    esr_iss, vme_ret);
-				vme_ret->exitcode = VM_EXITCODE_INST_EMUL;
+			} else if (esr_ec == EXCP_INSN_ABORT_L) {
+				/*
+				 * Raise an external abort. Device memory is
+				 * not executable
+				 */
+				raise_data_insn_abort(hypctx,
+				    hypctx->exit_info.far_el2, false,
+				    ISS_DATA_DFSC_EXT);
+				vme_ret->inst_length = 0;
+				return (HANDLED);
 			} else {
-				eprintf(
-				  "Unsupported instruction fault from guest\n");
-				arm64_print_hyp_regs(vme_ret);
-				vme_ret->exitcode = VM_EXITCODE_HYP;
+				arm64_gen_inst_emul_data(hypctx, esr_iss,
+				    vme_ret);
+				vme_ret->exitcode = VM_EXITCODE_INST_EMUL;
 			}
 			break;
 		default:
@@ -744,7 +836,7 @@ handle_el1_sync_excp(struct hyp *hyp, int vcpu, struct vm_exit *vme_ret,
 }
 
 static int
-arm64_handle_world_switch(struct hyp *hyp, int vcpu, int excp_type,
+arm64_handle_world_switch(struct hypctx *hypctx, int excp_type,
     struct vm_exit *vme, pmap_t pmap)
 {
 	int handled;
@@ -752,7 +844,7 @@ arm64_handle_world_switch(struct hyp *hyp, int vcpu, int excp_type,
 	switch (excp_type) {
 	case EXCP_TYPE_EL1_SYNC:
 		/* The exit code will be set by handle_el1_sync_excp(). */
-		handled = handle_el1_sync_excp(hyp, vcpu, vme, pmap);
+		handled = handle_el1_sync_excp(hypctx, vme, pmap);
 		break;
 
 	case EXCP_TYPE_EL1_IRQ:
@@ -782,32 +874,155 @@ arm64_handle_world_switch(struct hyp *hyp, int vcpu, int excp_type,
 	return (handled);
 }
 
-static int
-arm_vmrun(void *arg, int vcpu, register_t pc, pmap_t pmap,
-    struct vm_eventinfo *evinfo)
+static void
+ptp_release(void **cookie)
+{
+	if (*cookie != NULL) {
+		vm_gpa_release(*cookie);
+		*cookie = NULL;
+	}
+}
+
+static void *
+ptp_hold(struct vcpu *vcpu, vm_paddr_t ptpphys, size_t len, void **cookie)
+{
+	void *ptr;
+
+	ptp_release(cookie);
+	ptr = vm_gpa_hold(vcpu, ptpphys, len, VM_PROT_RW, cookie);
+	return (ptr);
+}
+
+void
+vmmops_gla2gpa(void *vcpui, uint64_t gla, int prot, uint64_t *gpa,
+    int *is_fault)
+{
+	struct hypctx *hypctx;
+	void *cookie;
+	uint64_t *ptep, pte;
+	uint64_t ttbr;
+
+	hypctx = (struct hypctx *)vcpui;
+
+	/* TODO: Handle TBI/MTE/etc */
+	/* TODO: Support non-native granule size */
+	/* TODO: Support non-4 level page tables */
+	/* TODO: Support > 48-bit address space */
+	/* TODO: Check prot */
+
+	/* Check if the MMU is off */
+	if ((hypctx->sctlr_el1 & SCTLR_M) == 0) {
+		*is_fault = 0;
+		*gpa = gla;
+		return;
+	}
+
+	if (ADDR_IS_KERNEL(gla)) {
+		ttbr = hypctx->ttbr1_el1;
+	} else {
+		ttbr = hypctx->ttbr0_el1;
+	}
+
+	cookie = NULL;
+	ptep = ptp_hold(hypctx->vcpu, ttbr, PAGE_SIZE, &cookie);
+	pte = ptep[pmap_l0_index(gla)];
+	if ((pte & ATTR_DESCR_MASK) != L0_TABLE)
+		goto fault;
+
+	ptep = ptp_hold(hypctx->vcpu, pte & ~ATTR_MASK, PAGE_SIZE, &cookie);
+	pte = ptep[pmap_l1_index(gla)];
+	if ((pte & ATTR_DESCR_MASK) == L1_BLOCK) {
+		*gpa = (pte & ~ATTR_MASK) | (gla & L1_OFFSET);
+		goto done;
+	}
+	if ((pte & ATTR_DESCR_MASK) != L1_TABLE)
+		goto fault;
+
+	ptep = ptp_hold(hypctx->vcpu, pte & ~ATTR_MASK, PAGE_SIZE, &cookie);
+	pte = ptep[pmap_l2_index(gla)];
+	if ((pte & ATTR_DESCR_MASK) == L2_BLOCK) {
+		*gpa = (pte & ~ATTR_MASK) | (gla & L2_OFFSET);
+		goto done;
+	}
+	if ((pte & ATTR_DESCR_MASK) != L2_TABLE)
+		goto fault;
+
+	ptep = ptp_hold(hypctx->vcpu, pte & ~ATTR_MASK, PAGE_SIZE, &cookie);
+	pte = ptep[pmap_l3_index(gla)];
+	if ((pte & ATTR_DESCR_MASK) == L3_PAGE) {
+		*gpa = (pte & ~ATTR_MASK) | (gla & L3_OFFSET);
+	} else
+		goto fault;
+
+done:
+	*is_fault = 0;
+	ptp_release(&cookie);
+	return;
+
+fault:
+	*is_fault = 1;
+	ptp_release(&cookie);
+}
+
+int
+vmmops_run(void *vcpui, register_t pc, pmap_t pmap, struct vm_eventinfo *evinfo)
 {
 	uint64_t excp_type;
 	int handled;
 	register_t daif;
 	struct hyp *hyp;
 	struct hypctx *hypctx;
-	struct vm *vm;
+	struct vcpu *vcpu;
 	struct vm_exit *vme;
+	int mode;
 
-	hyp = (struct hyp *)arg;
-	vm = hyp->vm;
-	vme = vm_exitinfo(vm, vcpu);
+	hypctx = (struct hypctx *)vcpui;
+	hyp = hypctx->hyp;
+	vcpu = hypctx->vcpu;
+	vme = vm_exitinfo(vcpu);
 
-	hypctx = &hyp->ctx[vcpu];
 	hypctx->tf.tf_elr = (uint64_t)pc;
 
 	for (;;) {
+		if (hypctx->has_exception) {
+			hypctx->has_exception = false;
+			hypctx->elr_el1 = hypctx->tf.tf_elr;
+
+			mode = hypctx->tf.tf_spsr & (PSR_M_MASK | PSR_M_32);
+
+			if (mode == PSR_M_EL1t) {
+				hypctx->tf.tf_elr = hypctx->vbar_el1 + 0x0;
+			} else if (mode == PSR_M_EL1h) {
+				hypctx->tf.tf_elr = hypctx->vbar_el1 + 0x200;
+			} else if ((mode & PSR_M_32) == PSR_M_64) {
+				/* 64-bit EL0 */
+				hypctx->tf.tf_elr = hypctx->vbar_el1 + 0x400;
+			} else {
+				/* 32-bit EL0 */
+				hypctx->tf.tf_elr = hypctx->vbar_el1 + 0x600;
+			}
+
+			/* Set the new spsr */
+			hypctx->spsr_el1 = hypctx->tf.tf_spsr;
+
+			/* Set the new cpsr */
+			hypctx->tf.tf_spsr = hypctx->spsr_el1 & PSR_FLAGS;
+			/* TODO: DIT, PAN, SSBS */
+			hypctx->tf.tf_spsr |= PSR_DAIF | PSR_M_EL1h;
+		}
+
 		daif = intr_disable();
 
 		/* Check if the vcpu is suspended */
 		if (vcpu_suspended(evinfo)) {
 			intr_restore(daif);
-			vm_exit_suspended(vm, vcpu, pc);
+			vm_exit_suspended(vcpu, pc);
+			break;
+		}
+
+		if (vcpu_debugged(vcpu)) {
+			intr_restore(daif);
+			vm_exit_debug(vcpu, pc);
 			break;
 		}
 
@@ -820,13 +1035,14 @@ arm_vmrun(void *arg, int vcpu, register_t pc, pmap_t pmap,
 		 * here, but for the previous VM?
 		 */
 		arm64_set_active_vcpu(hypctx);
-		vgic_v3_flush_hwstate(hypctx);
+		vgic_flush_hwstate(hypctx);
 
 		/* Call into EL2 to switch to the guest */
 		excp_type = vmm_call_hyp(HYP_ENTER_GUEST,
-		    hyp->el2_addr, vcpu);
+		    hyp->el2_addr, hypctx->el2_addr);
 
-		vgic_v3_sync_hwstate(hypctx);
+		vgic_sync_hwstate(hypctx);
+		vtimer_sync_hwstate(hypctx);
 
 		/*
 		 * Deactivate the stage2 pmap. vmm_pmap_clean_stage2_tlbi
@@ -846,7 +1062,7 @@ arm_vmrun(void *arg, int vcpu, register_t pc, pmap_t pmap,
 		vme->u.hyp.far_el2 = hypctx->exit_info.far_el2;
 		vme->u.hyp.hpfar_el2 = hypctx->exit_info.hpfar_el2;
 
-		handled = arm64_handle_world_switch(hyp, vcpu, excp_type, vme,
+		handled = arm64_handle_world_switch(hypctx, excp_type, vme,
 		    pmap);
 		if (handled == UNHANDLED)
 			/* Exit loop to emulate instruction. */
@@ -868,28 +1084,30 @@ arm_pcpu_vmcleanup(void *arg)
 	hyp = arg;
 	maxcpus = vm_get_maxcpus(hyp->vm);
 	for (i = 0; i < maxcpus; i++) {
-		if (arm64_get_active_vcpu() == &hyp->ctx[i]) {
+		if (arm64_get_active_vcpu() == hyp->ctx[i]) {
 			arm64_set_active_vcpu(NULL);
 			break;
 		}
 	}
 }
 
-static void
-arm_vmcleanup(void *arg)
+void
+vmmops_vcpu_cleanup(void *vcpui)
 {
-	struct hyp *hyp = arg;
-	struct hypctx *hypctx;
-	int i;
+	struct hypctx *hypctx = vcpui;
 
-	for (i = 0; i < VM_MAXCPU; i++) {
-		hypctx = &hyp->ctx[i];
-		vtimer_cpucleanup(hypctx);
-		vgic_v3_cpucleanup(hypctx);
-	}
+	vtimer_cpucleanup(hypctx);
+	vgic_cpucleanup(hypctx);
+	free(hypctx, M_HYP);
+}
+
+void
+vmmops_cleanup(void *vmi)
+{
+	struct hyp *hyp = vmi;
 
 	vtimer_vmcleanup(hyp);
-	vgic_v3_vmcleanup(hyp);
+	vgic_vmcleanup(hyp);
 
 	smp_rendezvous(NULL, arm_pcpu_vmcleanup, NULL, hyp);
 
@@ -984,18 +1202,19 @@ hypctx_regptr(struct hypctx *hypctx, int reg)
 	return (NULL);
 }
 
-static int
-arm_getreg(void *arg, int vcpu, int reg, uint64_t *retval)
+int
+vmmops_getreg(void *vcpui, int reg, uint64_t *retval)
 {
 	void *regp;
 	int running, hostcpu;
-	struct hyp *hyp = arg;
+	struct hypctx *hypctx = vcpui;
 
-	running = vcpu_is_running(hyp->vm, vcpu, &hostcpu);
+	running = vcpu_is_running(hypctx->vcpu, &hostcpu);
 	if (running && hostcpu != curcpu)
-		panic("arm_getreg: %s%d is running", vm_name(hyp->vm), vcpu);
+		panic("arm_getreg: %s%d is running", vm_name(hypctx->hyp->vm),
+		    vcpu_vcpuid(hypctx->vcpu));
 
-	if ((regp = hypctx_regptr(&hyp->ctx[vcpu], reg)) != NULL) {
+	if ((regp = hypctx_regptr(hypctx, reg)) != NULL) {
 		if (reg == VM_REG_GUEST_SPSR)
 			*retval = *(uint32_t *)regp;
 		else
@@ -1006,18 +1225,19 @@ arm_getreg(void *arg, int vcpu, int reg, uint64_t *retval)
 	}
 }
 
-static int
-arm_setreg(void *arg, int vcpu, int reg, uint64_t val)
+int
+vmmops_setreg(void *vcpui, int reg, uint64_t val)
 {
 	void *regp;
-	struct hyp *hyp = arg;
+	struct hypctx *hypctx = vcpui;
 	int running, hostcpu;
 
-	running = vcpu_is_running(hyp->vm, vcpu, &hostcpu);
+	running = vcpu_is_running(hypctx->vcpu, &hostcpu);
 	if (running && hostcpu != curcpu)
-		panic("hyp_setreg: %s%d is running", vm_name(hyp->vm), vcpu);
+		panic("arm_setreg: %s%d is running", vm_name(hypctx->hyp->vm),
+		    vcpu_vcpuid(hypctx->vcpu));
 
-	if ((regp = hypctx_regptr(&hyp->ctx[vcpu], reg)) != NULL) {
+	if ((regp = hypctx_regptr(hypctx, reg)) != NULL) {
 		if (reg == VM_REG_GUEST_SPSR)
 			*(uint32_t *)regp = (uint32_t)val;
 		else
@@ -1028,14 +1248,32 @@ arm_setreg(void *arg, int vcpu, int reg, uint64_t val)
 	}
 }
 
-static int
-arm_getcap(void *arg, int vcpu, int type, int *retval)
+int
+vmmops_exception(void *vcpui, uint64_t esr, uint64_t far)
+{
+	struct hypctx *hypctx = vcpui;
+	int running, hostcpu;
+
+	running = vcpu_is_running(hypctx->vcpu, &hostcpu);
+	if (running && hostcpu != curcpu)
+		panic("%s: %s%d is running", __func__, vm_name(hypctx->hyp->vm),
+		    vcpu_vcpuid(hypctx->vcpu));
+
+	hypctx->far_el1 = far;
+	hypctx->esr_el1 = esr;
+	hypctx->has_exception = true;
+
+	return (0);
+}
+
+int
+vmmops_getcap(void *vcpui, int num, int *retval)
 {
 	int ret;
 
 	ret = ENOENT;
 
-	switch (type) {
+	switch (num) {
 	case VM_CAP_UNRESTRICTED_GUEST:
 		*retval = 1;
 		ret = 0;
@@ -1047,30 +1285,9 @@ arm_getcap(void *arg, int vcpu, int type, int *retval)
 	return (ret);
 }
 
-static int
-arm_setcap(void *arg, int vcpu, int type, int val)
+int
+vmmops_setcap(void *vcpui, int num, int val)
 {
 
 	return (ENOENT);
 }
-
-static
-void arm_restore(void)
-{
-	;
-}
-
-struct vmm_ops vmm_ops_arm = {
-	.init = arm_init,
-	.cleanup = arm_cleanup,
-	.resume = arm_restore,
-	.vminit = arm_vminit,
-	.vmrun = arm_vmrun,
-	.vmcleanup = arm_vmcleanup,
-	.vmgetreg = arm_getreg,
-	.vmsetreg = arm_setreg,
-	.vmgetcap = arm_getcap,
-	.vmsetcap = arm_setcap,
-	.vmspace_alloc	= arm_vmspace_alloc,
-	.vmspace_free	= arm_vmspace_free,
-};

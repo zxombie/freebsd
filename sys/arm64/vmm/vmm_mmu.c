@@ -401,7 +401,7 @@ vmmpmap_remove(vm_offset_t va, vm_size_t size, bool invalidate)
 			l3e |= ATTR_S1_AP(ATTR_S1_AP_RO);
 			atomic_store_64(&l3[pmap_l3_index(va)], l3e);
 
-			l3_list[i] = l3;
+			l3_list[i] = &l3[pmap_l3_index(va)];
 			i++;
 		} else {
 			/*
