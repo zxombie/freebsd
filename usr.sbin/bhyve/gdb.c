@@ -38,7 +38,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <machine/atomic.h>
-#include <machine/specialreg.h>
+//#include <machine/specialreg.h>
 #include <machine/vmm.h>
 #include <netinet/in.h>
 #include <assert.h>
@@ -135,6 +135,81 @@ static struct vcpu_state *vcpu_state;
 static int cur_vcpu, stopped_vcpu;
 static bool gdb_active = false;
 
+#if defined(__aarch64__)
+static const int gdb_regset[] = {
+	VM_REG_GUEST_X0,
+	VM_REG_GUEST_X1,
+	VM_REG_GUEST_X2,
+	VM_REG_GUEST_X3,
+	VM_REG_GUEST_X4,
+	VM_REG_GUEST_X5,
+	VM_REG_GUEST_X6,
+	VM_REG_GUEST_X7,
+	VM_REG_GUEST_X8,
+	VM_REG_GUEST_X9,
+	VM_REG_GUEST_X10,
+	VM_REG_GUEST_X11,
+	VM_REG_GUEST_X12,
+	VM_REG_GUEST_X13,
+	VM_REG_GUEST_X14,
+	VM_REG_GUEST_X15,
+	VM_REG_GUEST_X16,
+	VM_REG_GUEST_X17,
+	VM_REG_GUEST_X18,
+	VM_REG_GUEST_X19,
+	VM_REG_GUEST_X20,
+	VM_REG_GUEST_X21,
+	VM_REG_GUEST_X22,
+	VM_REG_GUEST_X23,
+	VM_REG_GUEST_X24,
+	VM_REG_GUEST_X25,
+	VM_REG_GUEST_X26,
+	VM_REG_GUEST_X27,
+	VM_REG_GUEST_X28,
+	VM_REG_GUEST_X29,
+	VM_REG_GUEST_LR,
+	VM_REG_GUEST_SP,
+	VM_REG_ELR_EL2,		/* guest pc */
+	VM_REG_GUEST_SPSR,
+};
+
+static const int gdb_regsize[] = {
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	8,
+	4,	/* cpsr */
+};
+#elif defined(__amd64__)
 static const int gdb_regset[] = {
 	VM_REG_GUEST_RAX,
 	VM_REG_GUEST_RBX,
@@ -188,6 +263,10 @@ static const int gdb_regsize[] = {
 	4,
 	4
 };
+#endif
+
+static_assert(nitems(gdb_regset) == nitems(gdb_regsize),
+    "gdb_regset gdb_regsize size mismatch");
 
 #ifdef GDB_LOG
 #include <stdarg.h>
@@ -222,6 +301,7 @@ debug(const char *fmt, ...)
 
 static void	remove_all_sw_breakpoints(void);
 
+#if 0
 static int
 guest_paging_info(int vcpu, struct vm_guest_paging *paging)
 {
@@ -260,6 +340,7 @@ guest_paging_info(int vcpu, struct vm_guest_paging *paging)
 		paging->paging_mode = PAGING_MODE_PAE;
 	return (0);
 }
+#endif /* 0 */
 
 /*
  * Map a guest virtual address to a physical address (for a given vcpu).
@@ -270,17 +351,19 @@ guest_paging_info(int vcpu, struct vm_guest_paging *paging)
 static int
 guest_vaddr2paddr(int vcpu, uint64_t vaddr, uint64_t *paddr)
 {
-	struct vm_guest_paging paging;
+	//struct vm_guest_paging paging;
 	int fault;
 
+#if 0
 	if (guest_paging_info(vcpu, &paging) == -1)
 		return (-1);
+#endif
 
 	/*
 	 * Always use PROT_READ.  We really care if the VA is
 	 * accessible, not if the current vCPU can write.
 	 */
-	if (vm_gla2gpa_nofault(ctx, vcpu, &paging, vaddr, PROT_READ, paddr,
+	if (vm_gla2gpa_nofault(ctx, vcpu, /*&paging,*/ vaddr, PROT_READ, paddr,
 	    &fault) == -1)
 		return (-1);
 	if (fault)
@@ -758,8 +841,12 @@ gdb_cpu_add(int vcpu)
 	assert(vcpu < guest_ncpus);
 	CPU_SET(vcpu, &vcpus_active);
 	if (!TAILQ_EMPTY(&breakpoints)) {
+#if 0
 		vm_set_capability(ctx, vcpu, VM_CAP_BPT_EXIT, 1);
 		debug("$vCPU %d enabled breakpoint exits\n", vcpu);
+#endif
+		printf("%s: breakpoints\n", __func__);
+		abort();
 	}
 
 	/*
@@ -782,7 +869,7 @@ static void
 gdb_cpu_resume(int vcpu)
 {
 	struct vcpu_state *vs;
-	int error;
+	//int error;
 
 	vs = &vcpu_state[vcpu];
 
@@ -793,8 +880,12 @@ gdb_cpu_resume(int vcpu)
 	assert(vs->hit_swbreak == false);
 	assert(vs->stepped == false);
 	if (vs->stepping) {
+#if 0
 		error = vm_set_capability(ctx, vcpu, VM_CAP_MTRAP_EXIT, 1);
 		assert(error == 0);
+#endif
+		printf("%s\n", __func__);
+		abort();
 	}
 }
 
@@ -827,6 +918,7 @@ gdb_suspend_vcpus(void)
 		gdb_finish_suspend_vcpus();
 }
 
+#if 0
 /*
  * Handler for VM_EXITCODE_MTRAP reported when a vCPU single-steps via
  * the VT-x-specific MTRAP exit.
@@ -924,10 +1016,12 @@ gdb_cpu_breakpoint(int vcpu, struct vm_exit *vmexit)
 	}
 	pthread_mutex_unlock(&gdb_lock);
 }
+#endif /* 0 */
 
 static bool
 gdb_step_vcpu(int vcpu)
 {
+#if 0
 	int error, val;
 
 	debug("$vCPU %d step\n", vcpu);
@@ -941,6 +1035,10 @@ gdb_step_vcpu(int vcpu)
 	CPU_CLR(vcpu, &vcpus_suspended);
 	pthread_cond_broadcast(&idle_vcpus);
 	return (true);
+#else
+	(void)vcpu;
+	return (false);
+#endif
 }
 
 static void
@@ -1082,6 +1180,7 @@ gdb_read_mem(const uint8_t *data, size_t len)
 	finish_packet();
 }
 
+#if 0
 static void
 gdb_write_mem(const uint8_t *data, size_t len)
 {
@@ -1209,16 +1308,20 @@ set_breakpoint_caps(bool enable)
 	}
 	return (true);
 }
+#endif /* 0 */
 
 static void
 remove_all_sw_breakpoints(void)
 {
+#if 0
 	struct breakpoint *bp, *nbp;
 	uint8_t *cp;
+#endif
 
 	if (TAILQ_EMPTY(&breakpoints))
 		return;
 
+#if 0
 	TAILQ_FOREACH_SAFE(bp, &breakpoints, link, nbp) {
 		debug("remove breakpoint at %#lx\n", bp->gpa);
 		cp = paddr_guest2host(ctx, bp->gpa, 1);
@@ -1228,8 +1331,12 @@ remove_all_sw_breakpoints(void)
 	}
 	TAILQ_INIT(&breakpoints);
 	set_breakpoint_caps(false);
+#endif
+	printf("%s\n", __func__);
+	abort();
 }
 
+#if 0
 static void
 update_sw_breakpoint(uint64_t gva, int kind, bool insert)
 {
@@ -1358,6 +1465,7 @@ parse_breakpoint(const uint8_t *data, size_t len)
 		break;
 	}
 }
+#endif /* 0 */
 
 static bool
 command_equals(const uint8_t *data, size_t len, const char *cmd)
@@ -1563,9 +1671,11 @@ handle_command(const uint8_t *data, size_t len)
 	case 'm':
 		gdb_read_mem(data, len);
 		break;
+#if 0
 	case 'M':
 		gdb_write_mem(data, len);
 		break;
+#endif
 	case 'T': {
 		int tid;
 
@@ -1592,10 +1702,12 @@ handle_command(const uint8_t *data, size_t len)
 			break;
 		}
 		break;
+#if 0
 	case 'z':
 	case 'Z':
 		parse_breakpoint(data, len);
 		break;
+#endif
 	case '?':
 		report_stop(false);
 		break;
