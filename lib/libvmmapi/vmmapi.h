@@ -46,7 +46,9 @@ struct iovec;
 struct vcpu;
 struct vmctx;
 struct vm_snapshot_meta;
+#ifdef __amd64__
 enum x2apic_state;
+#endif
 
 /*
  * Different styles of mapping the memory assigned to a VM into the address
@@ -129,23 +131,31 @@ void	*vm_map_gpa(struct vmctx *ctx, vm_paddr_t gaddr, size_t len);
 /* inverse operation to vm_map_gpa - extract guest address from host pointer */
 vm_paddr_t vm_rev_map_gpa(struct vmctx *ctx, void *addr);
 int	vm_get_gpa_pmap(struct vmctx *, uint64_t gpa, uint64_t *pte, int *num);
+#ifdef __amd64__
 int	vm_gla2gpa(struct vcpu *vcpu, struct vm_guest_paging *paging,
 		   uint64_t gla, int prot, uint64_t *gpa, int *fault);
 int	vm_gla2gpa_nofault(struct vcpu *vcpu,
 		   struct vm_guest_paging *paging, uint64_t gla, int prot,
 		   uint64_t *gpa, int *fault);
+#else
+int	vm_gla2gpa_nofault(struct vcpu *vcpu, uint64_t gla, int prot,
+		   uint64_t *gpa, int *fault);
+#endif
 uint32_t vm_get_lowmem_limit(struct vmctx *ctx);
 void	vm_set_lowmem_limit(struct vmctx *ctx, uint32_t limit);
 void	vm_set_memflags(struct vmctx *ctx, int flags);
 int	vm_get_memflags(struct vmctx *ctx);
 const char *vm_get_name(struct vmctx *ctx);
 size_t	vm_get_lowmem_size(struct vmctx *ctx);
+size_t	vm_get_highmem_base(struct vmctx *ctx);
 size_t	vm_get_highmem_size(struct vmctx *ctx);
 int	vm_set_desc(struct vcpu *vcpu, int reg,
 		    uint64_t base, uint32_t limit, uint32_t access);
 int	vm_get_desc(struct vcpu *vcpu, int reg,
 		    uint64_t *base, uint32_t *limit, uint32_t *access);
+#ifdef __amd64__
 int	vm_get_seg_desc(struct vcpu *vcpu, int reg, struct seg_desc *seg_desc);
+#endif
 int	vm_set_register(struct vcpu *vcpu, int reg, uint64_t val);
 int	vm_get_register(struct vcpu *vcpu, int reg, uint64_t *retval);
 int	vm_set_register_set(struct vcpu *vcpu, unsigned int count,
@@ -155,6 +165,16 @@ int	vm_get_register_set(struct vcpu *vcpu, unsigned int count,
 int	vm_run(struct vcpu *vcpu, struct vm_run *vmrun);
 int	vm_suspend(struct vmctx *ctx, enum vm_suspend_how how);
 int	vm_reinit(struct vmctx *ctx);
+#ifdef __aarch64__
+int	vm_attach_vgic(struct vmctx *ctx, uint64_t dist_start, size_t dist_size,
+    uint64_t redist_start, size_t redist_size);
+int	vm_assert_irq(struct vmctx *ctx, uint32_t irq);
+int	vm_deassert_irq(struct vmctx *ctx, uint32_t irq);
+int	vm_raise_msi(struct vmctx *ctx, uint64_t addr, uint64_t msg, int bus,
+    int slot, int func);
+int	vm_inject_exception(struct vcpu *vcpu, uint64_t esr, uint64_t far);
+#endif
+#ifdef __amd64__
 int	vm_apicid2vcpu(struct vmctx *ctx, int apicid);
 int	vm_inject_exception(struct vcpu *vcpu, int vector,
     int errcode_valid, uint32_t errcode, int restart_instruction);
@@ -173,6 +193,7 @@ int	vm_isa_pulse_irq(struct vmctx *ctx, int atpic_irq, int ioapic_irq);
 int	vm_isa_set_irq_trigger(struct vmctx *ctx, int atpic_irq,
 	    enum vm_intr_trigger trigger);
 int	vm_inject_nmi(struct vcpu *vcpu);
+#endif
 int	vm_capability_name2type(const char *capname);
 const char *vm_capability_type2name(int type);
 int	vm_get_capability(struct vcpu *vcpu, enum vm_cap_type cap,
@@ -202,8 +223,10 @@ uint64_t *vm_get_stats(struct vcpu *vcpu, struct timeval *ret_tv,
 		       int *ret_entries);
 const char *vm_get_stat_desc(struct vmctx *ctx, int index);
 
-int	vm_get_x2apic_state(struct vcpu *vcpu, enum x2apic_state *s);
-int	vm_set_x2apic_state(struct vcpu *vcpu, enum x2apic_state s);
+#ifdef __amd64__
+int	vm_get_x2apic_state(struct vmctx *ctx, int vcpu, enum x2apic_state *s);
+int	vm_set_x2apic_state(struct vmctx *ctx, int vcpu, enum x2apic_state s);
+#endif
 
 int	vm_get_hpet_capabilities(struct vmctx *ctx, uint32_t *capabilities);
 
@@ -216,9 +239,11 @@ int	vm_get_hpet_capabilities(struct vmctx *ctx, uint32_t *capabilities);
  *   0		  1		An exception was injected into the guest
  * EFAULT	 N/A		Error
  */
+#ifdef __amd64__
 int	vm_copy_setup(struct vcpu *vcpu, struct vm_guest_paging *pg,
 	    uint64_t gla, size_t len, int prot, struct iovec *iov, int iovcnt,
 	    int *fault);
+#endif
 void	vm_copyin(struct iovec *guest_iov, void *host_dst, size_t len);
 void	vm_copyout(const void *host_src, struct iovec *guest_iov, size_t len);
 void	vm_copy_teardown(struct iovec *iov, int iovcnt);
