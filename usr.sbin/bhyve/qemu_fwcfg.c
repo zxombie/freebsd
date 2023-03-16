@@ -429,7 +429,9 @@ int
 qemu_fwcfg_init(struct vmctx *const ctx)
 {
 	int error;
+#ifdef __amd64__
 	bool fwcfg_enabled;
+#endif
 
 	/*
 	 * The fwcfg implementation currently only provides an I/O port
@@ -438,10 +440,10 @@ qemu_fwcfg_init(struct vmctx *const ctx)
 	 */
 #ifdef __amd64__
 	fwcfg_enabled = strcmp(lpc_fwcfg(), "qemu") == 0;
-#else
-	fwcfg_enabled = false;
 #endif
 
+	(void)ctx;
+#ifdef __amd64__
 	/*
 	 * Bhyve supports fwctl (bhyve) and fwcfg (qemu) as firmware interfaces.
 	 * Both are using the same ports. So, it's not possible to provide both
@@ -465,7 +467,6 @@ qemu_fwcfg_init(struct vmctx *const ctx)
 			goto done;
 		}
 
-#ifdef __amd64__
 		if ((error = qemu_fwcfg_register_port("qemu_fwcfg_selector",
 		    QEMU_FWCFG_SELECTOR_PORT_NUMBER,
 		    QEMU_FWCFG_SELECTOR_PORT_SIZE,
@@ -485,8 +486,8 @@ qemu_fwcfg_init(struct vmctx *const ctx)
 			    __func__, QEMU_FWCFG_DATA_PORT_NUMBER);
 			goto done;
 		}
-#endif
 	}
+#endif
 
 	/* add common fwcfg items */
 	if ((error = qemu_fwcfg_add_item_signature()) != 0) {

@@ -37,7 +37,7 @@
 #include <sys/stat.h>
 
 #include <machine/atomic.h>
-#include <machine/specialreg.h>
+//#include <machine/specialreg.h>
 #include <machine/vmm.h>
 #include <netinet/in.h>
 #include <assert.h>
@@ -64,6 +64,10 @@
 #include "gdb.h"
 #include "mem.h"
 #include "mevent.h"
+
+#ifdef __aarch64__
+#include <machine/armreg.h>
+#endif
 
 #define	_PATH_GDB_XML		"/usr/share/bhyve/gdb"
 
@@ -146,10 +150,49 @@ static struct vcpu **vcpus;
 static int cur_vcpu, stopped_vcpu;
 static bool gdb_active = false;
 
-static const struct gdb_reg {
+struct gdb_reg {
 	enum vm_reg_name id;
 	int size;
-} gdb_regset[] = {
+};
+#if defined(__aarch64__)
+static const struct gdb_reg gdb_regset[] = {
+	{ .id = VM_REG_GUEST_X0, .size = 8 },
+	{ .id = VM_REG_GUEST_X1, .size = 8 },
+	{ .id = VM_REG_GUEST_X2, .size = 8 },
+	{ .id = VM_REG_GUEST_X3, .size = 8 },
+	{ .id = VM_REG_GUEST_X4, .size = 8 },
+	{ .id = VM_REG_GUEST_X5, .size = 8 },
+	{ .id = VM_REG_GUEST_X6, .size = 8 },
+	{ .id = VM_REG_GUEST_X7, .size = 8 },
+	{ .id = VM_REG_GUEST_X8, .size = 8 },
+	{ .id = VM_REG_GUEST_X9, .size = 8 },
+	{ .id = VM_REG_GUEST_X10, .size = 8 },
+	{ .id = VM_REG_GUEST_X11, .size = 8 },
+	{ .id = VM_REG_GUEST_X12, .size = 8 },
+	{ .id = VM_REG_GUEST_X13, .size = 8 },
+	{ .id = VM_REG_GUEST_X14, .size = 8 },
+	{ .id = VM_REG_GUEST_X15, .size = 8 },
+	{ .id = VM_REG_GUEST_X16, .size = 8 },
+	{ .id = VM_REG_GUEST_X17, .size = 8 },
+	{ .id = VM_REG_GUEST_X18, .size = 8 },
+	{ .id = VM_REG_GUEST_X19, .size = 8 },
+	{ .id = VM_REG_GUEST_X20, .size = 8 },
+	{ .id = VM_REG_GUEST_X21, .size = 8 },
+	{ .id = VM_REG_GUEST_X22, .size = 8 },
+	{ .id = VM_REG_GUEST_X23, .size = 8 },
+	{ .id = VM_REG_GUEST_X24, .size = 8 },
+	{ .id = VM_REG_GUEST_X25, .size = 8 },
+	{ .id = VM_REG_GUEST_X26, .size = 8 },
+	{ .id = VM_REG_GUEST_X27, .size = 8 },
+	{ .id = VM_REG_GUEST_X28, .size = 8 },
+	{ .id = VM_REG_GUEST_X29, .size = 8 },
+	{ .id = VM_REG_GUEST_LR, .size = 8 },
+	{ .id = VM_REG_GUEST_SP, .size = 8 },
+	{ .id = VM_REG_GUEST_PC, .size = 8 },
+	{ .id = VM_REG_GUEST_CPSR, .size = 4 },
+};
+#elif defined(__amd64__)
+static const struct gdb_reg gdb_regset[] = {
 	{ .id = VM_REG_GUEST_RAX, .size = 8 },
 	{ .id = VM_REG_GUEST_RBX, .size = 8 },
 	{ .id = VM_REG_GUEST_RCX, .size = 8 },
@@ -191,6 +234,7 @@ static const struct gdb_reg {
 	{ .id = VM_REG_GUEST_TPR, .size = 8 },
 	{ .id = VM_REG_GUEST_EFER, .size = 8 },
 };
+#endif
 
 #define	GDB_LOG
 #ifdef GDB_LOG
@@ -226,6 +270,7 @@ debug(const char *fmt, ...)
 
 static void	remove_all_sw_breakpoints(void);
 
+#if 0
 static int
 guest_paging_info(struct vcpu *vcpu, struct vm_guest_paging *paging)
 {
@@ -264,6 +309,33 @@ guest_paging_info(struct vcpu *vcpu, struct vm_guest_paging *paging)
 		paging->paging_mode = PAGING_MODE_PAE;
 	return (0);
 }
+#else
+static int
+guest_paging_info(struct vcpu *vcpu, struct vm_guest_paging *paging)
+{
+	uint64_t regs[6];
+	const int regset[6] = {
+		VM_REG_GUEST_TTBR0_EL1,
+		VM_REG_GUEST_TTBR1_EL1,
+		VM_REG_GUEST_TCR_EL1,
+		VM_REG_GUEST_TCR2_EL1,
+		VM_REG_GUEST_SCTLR_EL1,
+		VM_REG_GUEST_CPSR,
+	};
+
+	if (vm_get_register_set(vcpu, nitems(regset), regset, regs) == -1)
+		return (-1);
+
+	paging->ttbr0_addr = regs[0] & ~(TTBR_ASID_MASK | TTBR_CnP);
+	paging->ttbr1_addr = regs[1] & ~(TTBR_ASID_MASK | TTBR_CnP);
+	paging->tcr_el1 = regs[2];
+	paging->tcr2_el1 = regs[3];
+	paging->flags = regs[5] & (PSR_M_MASK | PSR_M_32);
+	if ((regs[4] & SCTLR_M) != 0)
+		paging->flags |= VM_GP_MMU_ENABLED;
+	return (0);
+}
+#endif /* 0 */
 
 /*
  * Map a guest virtual address to a physical address (for a given vcpu).
@@ -292,11 +364,13 @@ guest_vaddr2paddr(struct vcpu *vcpu, uint64_t vaddr, uint64_t *paddr)
 	return (1);
 }
 
+#if 0
 static uint64_t
 guest_pc(struct vm_exit *vme)
 {
 	return (vme->rip);
 }
+#endif
 
 static void
 io_buffer_reset(struct io_buffer *io)
@@ -754,6 +828,7 @@ _gdb_cpu_suspend(struct vcpu *vcpu, bool report_stop)
 	debug("$vCPU %d resuming\n", vcpuid);
 }
 
+#if 0
 /*
  * Requests vCPU single-stepping using a
  * VMEXIT suitable for the host platform.
@@ -790,6 +865,7 @@ _gdb_check_step(struct vcpu *vcpu)
 	}
 	return 0;
 }
+#endif
 
 /*
  * Invoked at the start of a vCPU thread's execution to inform the
@@ -810,8 +886,12 @@ gdb_cpu_add(struct vcpu *vcpu)
 	vcpus[vcpuid] = vcpu;
 	CPU_SET(vcpuid, &vcpus_active);
 	if (!TAILQ_EMPTY(&breakpoints)) {
+#if 0
 		vm_set_capability(vcpu, VM_CAP_BPT_EXIT, 1);
 		debug("$vCPU %d enabled breakpoint exits\n", vcpuid);
+#endif
+		printf("%s: breakpoints\n", __func__);
+		abort();
 	}
 
 	/*
@@ -834,7 +914,7 @@ static void
 gdb_cpu_resume(struct vcpu *vcpu)
 {
 	struct vcpu_state *vs;
-	int error;
+	//int error;
 
 	vs = &vcpu_state[vcpu_id(vcpu)];
 
@@ -845,8 +925,12 @@ gdb_cpu_resume(struct vcpu *vcpu)
 	assert(vs->hit_swbreak == false);
 	assert(vs->stepped == false);
 	if (vs->stepping) {
+#if 0
 		error = _gdb_set_step(vcpu, 1);
 		assert(error == 0);
+#endif
+		printf("%s\n", __func__);
+		abort();
 	}
 }
 
@@ -879,6 +963,7 @@ gdb_suspend_vcpus(void)
 		gdb_finish_suspend_vcpus();
 }
 
+#if 0
 /*
  * Invoked each time a vmexit handler needs to step a vCPU.
  * Handles MTRAP and RFLAGS.TF vmexits.
@@ -1007,10 +1092,12 @@ gdb_cpu_breakpoint(struct vcpu *vcpu, struct vm_exit *vmexit)
 	}
 	pthread_mutex_unlock(&gdb_lock);
 }
+#endif /* 0 */
 
 static bool
 gdb_step_vcpu(struct vcpu *vcpu)
 {
+#if 0
 	int error, vcpuid;
 
 	vcpuid = vcpu_id(vcpu);
@@ -1025,6 +1112,10 @@ gdb_step_vcpu(struct vcpu *vcpu)
 	CPU_CLR(vcpuid, &vcpus_suspended);
 	pthread_cond_broadcast(&idle_vcpus);
 	return (true);
+#else
+	(void)vcpu;
+	return (false);
+#endif
 }
 
 static void
@@ -1198,6 +1289,7 @@ gdb_read_mem(const uint8_t *data, size_t len)
 	finish_packet();
 }
 
+#if 0
 static void
 gdb_write_mem(const uint8_t *data, size_t len)
 {
@@ -1327,16 +1419,20 @@ set_breakpoint_caps(bool enable)
 	}
 	return (true);
 }
+#endif /* 0 */
 
 static void
 remove_all_sw_breakpoints(void)
 {
+#if 0
 	struct breakpoint *bp, *nbp;
 	uint8_t *cp;
+#endif
 
 	if (TAILQ_EMPTY(&breakpoints))
 		return;
 
+#if 0
 	TAILQ_FOREACH_SAFE(bp, &breakpoints, link, nbp) {
 		debug("remove breakpoint at %#lx\n", bp->gpa);
 		cp = paddr_guest2host(ctx, bp->gpa, sizeof(bp->shadow_inst));
@@ -1346,8 +1442,12 @@ remove_all_sw_breakpoints(void)
 	}
 	TAILQ_INIT(&breakpoints);
 	set_breakpoint_caps(false);
+#endif
+	printf("%s\n", __func__);
+	abort();
 }
 
+#if 0
 static void
 update_sw_breakpoint(uint64_t gva, int kind, bool insert)
 {
@@ -1476,6 +1576,7 @@ parse_breakpoint(const uint8_t *data, size_t len)
 		break;
 	}
 }
+#endif /* 0 */
 
 static bool
 command_equals(const uint8_t *data, size_t len, const char *cmd)
@@ -1749,9 +1850,11 @@ handle_command(const uint8_t *data, size_t len)
 	case 'm':
 		gdb_read_mem(data, len);
 		break;
+#if 0
 	case 'M':
 		gdb_write_mem(data, len);
 		break;
+#endif
 	case 'T': {
 		int tid;
 
@@ -1778,10 +1881,12 @@ handle_command(const uint8_t *data, size_t len)
 			break;
 		}
 		break;
+#if 0
 	case 'z':
 	case 'Z':
 		parse_breakpoint(data, len);
 		break;
+#endif
 	case '?':
 		report_stop(false);
 		break;

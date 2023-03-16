@@ -40,7 +40,6 @@ SRCS=	\
 	pci_emul.c		\
 	pci_hostbridge.c	\
 	pci_nvme.c		\
-	pci_passthru.c		\
 	pci_virtio_9p.c		\
 	pci_virtio_block.c	\
 	pci_virtio_console.c	\
@@ -52,16 +51,36 @@ SRCS=	\
 	qemu_loader.c		\
 	smbiostbl.c		\
 	sockstream.c		\
+	uart_backend.c		\
+	usb_emul.c		\
+	usb_mouse.c		\
+	virtio.c		\
+	vmexit.c
+
+.if ${MACHINE_CPUARCH} == "aarch64"
+# Missing vm_get_ioctls
+CFLAGS+=	-DWITHOUT_CAPSICUM
+LIBFDTSRCDIR=	${SRCTOP}/sys/contrib/libfdt
+CFLAGS+=	-I${LIBFDTSRCDIR}
+LIBADD+=		fdt
+SRCS+=	\
+	bootcode.c		\
+	fdt.c			\
+	mmio_uart.c		\
+	pl011.c
+.endif
+
+.if ${MACHINE_CPUARCH} == "amd64"
+SRCS+=	\
+	inout.c			\
+	pci_passthru.c		\
 	tpm_device.c		\
 	tpm_emul_passthru.c	\
 	tpm_intf_crb.c		\
 	tpm_ppi_qemu.c		\
-	uart_emul.c		\
-	usb_emul.c		\
-	usb_mouse.c		\
-	virtio.c		\
-	vmexit.c		\
-	vmgenc.c
+	uart_emul.c
+
+.endif
 
 .if ${MK_BHYVE_SNAPSHOT} != "no"
 SRCS+=	snapshot.c
@@ -82,7 +101,7 @@ CFLAGS+=-I${.CURDIR}		\
 	-I${.CURDIR}/../../contrib/lib9p \
 	-I${SRCTOP}/sys
 
-LIBADD=	vmmapi md nv pthread z util sbuf cam 9p
+LIBADD+=vmmapi md nv pthread z util sbuf cam 9p
 
 .if ${MK_BHYVE_SNAPSHOT} != "no"
 LIBADD+= ucl xo

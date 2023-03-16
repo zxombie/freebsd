@@ -234,7 +234,9 @@ basl_fwrite_dsdt(FILE *fp)
 	dsdt_line("  }");
 #endif
 
+#ifdef __amd64__
 	vmgenc_write_dsdt();
+#endif
 
 	const struct acpi_device_list_entry *entry;
 	SLIST_FOREACH(entry, &acpi_devices, chain) {
@@ -458,6 +460,7 @@ build_facs(struct vmctx *const ctx)
 	return (0);
 }
 
+#if defined(__amd64__)
 static int
 build_fadt(struct vmctx *const ctx)
 {
@@ -757,7 +760,9 @@ acpi_build(struct vmctx *ctx, int ncpu)
 	 * first table after XSDT.
 	 */
 	BASL_EXEC(build_rsdp(ctx));
+#if defined(__amd64__)
 	BASL_EXEC(build_fadt(ctx));
+#endif
 	BASL_EXEC(build_madt(ctx));
 #ifdef __amd64__
 	BASL_EXEC(build_hpet(ctx));
