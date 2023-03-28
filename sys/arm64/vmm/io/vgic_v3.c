@@ -1321,8 +1321,15 @@ vgic_register_read(struct hypctx *hypctx, struct vgic_register *reg_list,
 					*rval &= (1ul << (size * 8)) - 1;
 				}
 			} else {
-				panic("TODO: Handle invalid register size: "
-				    "reg %x size %d", reg, size);
+				/*
+				 * The access is an invalid size. Section
+				 * 12.1.3 "GIC memory-mapped register access"
+				 * of the GICv3 and GICv4 spec issue H
+				 * (IHI0069) lists the options. For a read
+				 * the controller returns unknown data, in
+				 * this case it is zero.
+				 */
+				*rval = 0;
 			}
 			return (true);
 		}
@@ -1344,8 +1351,11 @@ vgic_register_write(struct hypctx *hypctx, struct vgic_register *reg_list,
 				reg_list[i].write(hypctx, reg, offset,
 				    size, wval, NULL);
 			} else {
-				panic("TODO: Handle invalid register size: "
-				    "reg %x size %d", reg, size);
+				/*
+				 * See the comment in vgic_register_read.
+				 * For writes the controller ignores the
+				 * operation.
+				 */
 			}
 			return (true);
 		}
@@ -1380,8 +1390,7 @@ dist_read(struct vcpu *vcpu, uint64_t fault_ipa, uint64_t *rval,
 	    reg, size, rval, NULL))
 		return (0);
 
-	/* TODO: Check the correct behaviour */
-	printf("%s: %lx\n", __func__, fault_ipa - vgic->dist_start);
+	/* Reserved register addresses are RES0 so we can hardware it to 0 */
 	*rval = 0;
 
 	return (0);
@@ -1414,7 +1423,7 @@ dist_write(struct vcpu *vcpu, uint64_t fault_ipa, uint64_t wval,
 	    reg, size, wval, NULL))
 		return (0);
 
-	panic("%s: %lx\n", __func__, fault_ipa - vgic->dist_start);
+	/* Reserved register addresses are RES0 so we can ignore the write */
 	return (0);
 }
 
@@ -1597,7 +1606,9 @@ redist_read(struct vcpu *vcpu, uint64_t fault_ipa, uint64_t *rval,
 			return (0);
 	}
 
-	panic("%s: %lx", __func__, reg);
+	/* Reserved register addresses are RES0 so we can hardware it to 0 */
+	*rval = 0;
+	return (0);
 }
 
 static int
@@ -1635,7 +1646,8 @@ redist_write(struct vcpu *vcpu, uint64_t fault_ipa, uint64_t wval,
 			return (0);
 	}
 
-	panic("%s: %lx", __func__, reg);
+	/* Reserved register addresses are RES0 so we can ignore the write */
+	return (0);
 }
 
 static int
