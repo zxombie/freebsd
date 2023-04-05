@@ -29,13 +29,57 @@
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/proc.h>
 #include <sys/sysproto.h>
 
+#include <vm/vm.h>
+#include <vm/pmap.h>
+#include <vm/vm_map.h>
+
 #include <machine/sysarch.h>
+#include <machine/vmparam.h>
 
 int
 sysarch(struct thread *td, struct sysarch_args *uap)
 {
+	struct arm64_guard_page_args gp_args;
+	int error;
 
-	return (ENOTSUP);
+	switch(uap->op) {
+	case ARM64_GUARD_PAGE:
+		error = copyin(uap->parms, &gp_args, sizeof(gp_args));
+		if (error != 0)
+			break;
+
+		/* Only accept canonical addresses, no PAC or TBI */
+		if (!ADDR_IS_CANONICAL(gp_args.addr))
+			return (EINVAL);
+
+		/* Align the start to a page alignment */
+		gp_args.len += gp_args.addr & PAGE_MASK;
+		gp_args.addr = trunc_page(gp_args.addr);
+		/* Align the length */
+		gp_args.len = round_page(gp_args.len);
+
+		/* Check the address points to user memory */
+		if (gp_args.addr >= VM_MAX_USER_ADDRESS)
+			return (EINVAL);
+
+		/*
+		 * Check the length is not too long. As the length may wrap
+		 * we need to make sure it is no longer than the remaining
+		 * user memory.
+		 */
+		 if ((VM_MAX_USER_ADDRESS - gp_args.addr) < gp_args.len)
+			return (EINVAL);
+
+		error = pmap_bti_set(PCPU_GET(curpmap), gp_args.addr,
+		    gp_args.addr + gp_args.len);
+		break;
+	default:
+		error = EINVAL;
+		break;
+	}
+
+	return (error);
 }
