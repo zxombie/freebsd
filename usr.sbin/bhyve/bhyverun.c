@@ -685,6 +685,7 @@ smccc_affinity_info(uint64_t target_affinity, uint32_t lowest_affinity_level)
 static int
 vmexit_smccc(struct vmctx *ctx, struct vcpu *vcpu, struct vm_exit *vme)
 {
+	struct vcpu *newvcpu;
 	uint64_t newcpu, smccc_rv;
 	enum vm_suspend_how how;
 	int error;
@@ -712,17 +713,20 @@ vmexit_smccc(struct vmctx *ctx, struct vcpu *vcpu, struct vm_exit *vme)
 			break;
 		}
 
+		newvcpu = vcpu_info[newcpu].vcpu;
+		assert(newvcpu != NULL);
+
 		/* Set the context ID */
-		error = vm_set_register(vcpu, VM_REG_GUEST_X0,
+		error = vm_set_register(newvcpu, VM_REG_GUEST_X0,
 		    vme->u.smccc_call.args[2]);
 		assert(error == 0);
 
 		/* Set the start program counter */
-		error = vm_set_register(vcpu, VM_REG_GUEST_PC,
+		error = vm_set_register(newvcpu, VM_REG_GUEST_PC,
 		    vme->u.smccc_call.args[1]);
 		assert(error == 0);
 
-		vm_resume_cpu(vcpu);
+		vm_resume_cpu(newvcpu);
 		CPU_SET_ATOMIC(newcpu, &running_cpumask);
 
 		smccc_rv = PSCI_RETVAL_SUCCESS;
