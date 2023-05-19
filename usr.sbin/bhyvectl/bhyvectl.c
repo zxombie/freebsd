@@ -50,7 +50,9 @@
 #include <libutil.h>
 
 #include <machine/cpufunc.h>
+#if 0
 #include <machine/specialreg.h>
+#endif
 #include <machine/vmm.h>
 #include <machine/vmm_dev.h>
 #include <vmmapi.h>
@@ -72,7 +74,7 @@
 static const char *progname;
 
 static void
-usage(bool cpu_intel)
+usage(bool cpu_intel __unused)
 {
 
 	(void)fprintf(stderr,
@@ -85,6 +87,7 @@ usage(bool cpu_intel)
 #endif
 	"       [--get-all]\n"
 	"       [--get-stats]\n"
+#if 0
 	"       [--set-desc-ds]\n"
 	"       [--get-desc-ds]\n"
 	"       [--set-desc-es]\n"
@@ -198,9 +201,11 @@ usage(bool cpu_intel)
 	"       [--get-msr-bitmap-address]\n"
 	"       [--get-guest-sysenter]\n"
 	"       [--get-exit-reason]\n"
-	"       [--get-cpu-topology]\n",
-	progname);
+	"       [--get-cpu-topology]\n"
+#endif /* 0 */
+	, progname);
 
+#if 0
 	if (cpu_intel) {
 		(void)fprintf(stderr,
 		"       [--get-vmcs-pinbased-ctls]\n"
@@ -246,16 +251,20 @@ usage(bool cpu_intel)
 		"       [--get-avic-table]\n"
 		);
 	}
+#endif
 	exit(1);
 }
 
+#if 0
 static int get_rtc_time, set_rtc_time;
 static int get_rtc_nvram, set_rtc_nvram;
 static int rtc_nvram_offset;
 static uint8_t rtc_nvram_value;
 static time_t rtc_secs;
+#endif
 
-static int get_stats, getcap, setcap, capval, get_gpa_pmap;
+static int get_stats; /*, getcap, setcap, capval, get_gpa_pmap; */
+#if 0
 static int inject_nmi, assert_lapic_lvt;
 static int force_reset, force_poweroff;
 static const char *capname;
@@ -329,9 +338,11 @@ static int get_vmcs_exit_inst_length;
 
 static uint64_t desc_base;
 static uint32_t desc_limit, desc_access;
+#endif /* 0 */
 
 static int get_all;
 
+#if 0
 static void
 dump_vm_run_exitcode(struct vm_exit *vmexit, int vcpu)
 {
@@ -542,10 +553,12 @@ vm_get_vmcb_field(struct vcpu *vcpu, int off, int bytes,
 
 	return (vm_get_register(vcpu, VMCB_ACCESS(off, bytes), ret_val));
 }
+#endif /* 0 */
 
 enum {
 	VMNAME = 1000,	/* avoid collision with return values from getopt */
 	VCPU,
+#if 0
 	SET_MEM,
 	SET_EFER,
 	SET_CR0,
@@ -586,8 +599,10 @@ enum {
 	SET_CHECKPOINT_FILE,
 	SET_SUSPEND_FILE,
 #endif
+#endif /* 0 */
 };
 
+#if 0
 static void
 print_cpus(const char *banner, const cpuset_t *cpus)
 {
@@ -1316,13 +1331,15 @@ get_misc_vmcb(struct vcpu *vcpu, int vcpuid)
 
 	return (error);
 }
+#endif /* 0 */
 
 static struct option *
-setup_options(bool cpu_intel)
+setup_options(bool cpu_intel __unused)
 {
 	const struct option common_opts[] = {
 		{ "vm",		REQ_ARG,	0,	VMNAME },
 		{ "cpu",	REQ_ARG,	0,	VCPU },
+#if 0
 		{ "set-mem",	REQ_ARG,	0,	SET_MEM },
 		{ "set-efer",	REQ_ARG,	0,	SET_EFER },
 		{ "set-cr0",	REQ_ARG,	0,	SET_CR0 },
@@ -1362,7 +1379,9 @@ setup_options(bool cpu_intel)
 		{ "get-rtc-nvram", NO_ARG,	&get_rtc_nvram,	1 },
 		{ "set-rtc-nvram", REQ_ARG,	0,	SET_RTC_NVRAM },
 		{ "getcap",	NO_ARG,		&getcap,	1 },
+#endif
 		{ "get-stats",	NO_ARG,		&get_stats,	1 },
+#if 0
 		{ "get-desc-ds",NO_ARG,		&get_desc_ds,	1 },
 		{ "set-desc-ds",NO_ARG,		&set_desc_ds,	1 },
 		{ "get-desc-es",NO_ARG,		&get_desc_es,	1 },
@@ -1454,8 +1473,10 @@ setup_options(bool cpu_intel)
 		{ "checkpoint", 	REQ_ARG, 0,	SET_CHECKPOINT_FILE},
 		{ "suspend", 		REQ_ARG, 0,	SET_SUSPEND_FILE},
 #endif
+#endif
 	};
 
+#if 0
 	const struct option intel_opts[] = {
 		{ "get-vmcs-pinbased-ctls",
 				NO_ARG,		&get_pinbased_ctls, 1 },
@@ -1528,6 +1549,7 @@ setup_options(bool cpu_intel)
 		{ "get-avic-table",
 				NO_ARG,	&get_avic_table, 	1 }
 	};
+#endif
 
 	const struct option null_opt = {
 		NULL, 0, NULL, 0
@@ -1539,10 +1561,12 @@ setup_options(bool cpu_intel)
 
 	optlen = sizeof(common_opts);
 
+#if 0
 	if (cpu_intel)
 		optlen += sizeof(intel_opts);
 	else
 		optlen += sizeof(amd_opts);
+#endif
 
 	optlen += sizeof(null_opt);
 
@@ -1552,6 +1576,7 @@ setup_options(bool cpu_intel)
 	memcpy(cp, common_opts, sizeof(common_opts));
 	cp += sizeof(common_opts);
 
+#if 0
 	if (cpu_intel) {
 		memcpy(cp, intel_opts, sizeof(intel_opts));
 		cp += sizeof(intel_opts);
@@ -1559,6 +1584,7 @@ setup_options(bool cpu_intel)
 		memcpy(cp, amd_opts, sizeof(amd_opts));
 		cp += sizeof(amd_opts);
 	}
+#endif
 
 	memcpy(cp, &null_opt, sizeof(null_opt));
 	cp += sizeof(null_opt);
@@ -1566,6 +1592,7 @@ setup_options(bool cpu_intel)
 	return (all_opts);
 }
 
+#if 0
 static const char *
 wday_str(int idx)
 {
@@ -1741,34 +1768,46 @@ snapshot_request(const char *vmname, char *file, bool suspend)
 	return (send_message(vmname, nvl));
 }
 #endif
+#endif /* 0 */
 
 int
 main(int argc, char *argv[])
 {
 	char *vmname;
-	int error, ch, vcpuid, ptenum;
+	int error, ch, vcpuid;
+#if 0
+	int ptenum;
 	vm_paddr_t gpa_pmap;
 	struct vm_run vmrun;
 	uint64_t rax, cr0, cr2, cr3, cr4, dr0, dr1, dr2, dr3, dr6, dr7;
 	uint64_t rsp, rip, rflags, efer, pat;
 	uint64_t eptp, bm, addr, u64, pteval[4], *pte, info[2];
+#endif
 	struct vmctx *ctx;
 	struct vcpu *vcpu;
+#if 0
 	cpuset_t cpus;
+#endif
 	bool cpu_intel;
+#if 0
 	uint64_t cs, ds, es, fs, gs, ss, tr, ldtr;
 	struct tm tm;
+#endif
 	struct option *opts;
+#if 0
 #ifdef BHYVE_SNAPSHOT
 	char *checkpoint_file = NULL;
 #endif
+#endif
 
-	cpu_intel = cpu_vendor_intel();
+	cpu_intel = false; //cpu_vendor_intel();
 	opts = setup_options(cpu_intel);
 
 	vcpuid = 0;
 	vmname = NULL;
+#if 0
 	assert_lapic_lvt = -1;
+#endif
 	progname = basename(argv[0]);
 
 	while ((ch = getopt_long(argc, argv, "", opts, NULL)) != -1) {
@@ -1781,6 +1820,7 @@ main(int argc, char *argv[])
 		case VCPU:
 			vcpuid = atoi(optarg);
 			break;
+#if 0
 		case SET_MEM:
 			memsize = atoi(optarg) * MB;
 			memsize = roundup(memsize, 2 * MB);
@@ -1930,6 +1970,7 @@ main(int argc, char *argv[])
 			vm_suspend_opt = (ch == SET_SUSPEND_FILE);
 			break;
 #endif
+#endif /* 0 */
 		default:
 			usage(cpu_intel);
 		}
@@ -1942,8 +1983,10 @@ main(int argc, char *argv[])
 
 	error = 0;
 
+#if 0
 	if (!error && create)
 		error = vm_create(vmname);
+#endif
 
 	if (!error) {
 		ctx = vm_open(vmname);
@@ -1956,6 +1999,7 @@ main(int argc, char *argv[])
 		vcpu = vm_vcpu_open(ctx, vcpuid);
 	}
 
+#if 0
 	if (!error && memsize)
 		error = vm_setup_memory(ctx, memsize, VM_MMAP_ALL);
 
@@ -2363,6 +2407,7 @@ main(int argc, char *argv[])
 			print_intinfo("current", info[1]);
 		}
 	}
+#endif /* 0 */
 
 	if (!error && (get_stats || get_all)) {
 		int i, num_stats;
@@ -2380,6 +2425,7 @@ main(int argc, char *argv[])
 		}
 	}
 
+#if 0
 	if (!error && (get_cpu_topology || get_all)) {
 		uint16_t sockets, cores, threads, maxcpus;
 
@@ -2417,6 +2463,7 @@ main(int argc, char *argv[])
 #ifdef BHYVE_SNAPSHOT
 	if (!error && checkpoint_file)
 		error = snapshot_request(vmname, checkpoint_file, vm_suspend_opt);
+#endif
 #endif
 
 	free (opts);
