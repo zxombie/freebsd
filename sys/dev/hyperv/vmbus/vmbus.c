@@ -113,7 +113,7 @@ static uint32_t			vmbus_get_vcpu_id_method(device_t bus,
 				    device_t dev, int cpu);
 static struct taskqueue		*vmbus_get_eventtq_method(device_t, device_t,
 				    int);
-#if defined(EARLY_AP_STARTUP) || defined(__aarch64__)
+#if defined(EARLY_AP_STARTUP) //|| defined(__aarch64__)
 static void			vmbus_intrhook(void *);
 #endif
 
@@ -1488,7 +1488,7 @@ vmbus_event_proc_dummy(struct vmbus_softc *sc __unused, int cpu __unused)
 {
 }
 
-#if defined(EARLY_AP_STARTUP) || defined(__aarch64__)
+#if defined(EARLY_AP_STARTUP) //|| defined(__aarch64__)
 
 static void
 vmbus_intrhook(void *xsc)
@@ -1517,7 +1517,7 @@ vmbus_attach(device_t dev)
 	 */
 	vmbus_sc->vmbus_event_proc = vmbus_event_proc_dummy;
 
-#if defined(EARLY_AP_STARTUP) || defined(__aarch64__)
+#if defined(EARLY_AP_STARTUP) //|| defined(__aarch64__)
 	/*
 	 * Defer the real attach until the pause(9) works as expected.
 	 */
@@ -1531,8 +1531,8 @@ vmbus_attach(device_t dev)
 	 * cold set to zero, we just call the driver
 	 * initialization directly.
 	 */
-	if (!cold)
-		vmbus_doattach(vmbus_sc);
+	//if (!cold)
+	//	vmbus_doattach(vmbus_sc);
 #endif /* EARLY_AP_STARTUP  and aarch64 */
 
 	return (0);
@@ -1578,7 +1578,7 @@ vmbus_detach(device_t dev)
 	return (0);
 }
 
-#if !defined(EARLY_AP_STARTUP) && !defined(__aarch64__)
+#if !defined(EARLY_AP_STARTUP) //&& !defined(__aarch64__)
 
 static void
 vmbus_sysinit(void *arg __unused)
