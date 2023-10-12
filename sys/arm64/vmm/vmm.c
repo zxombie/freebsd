@@ -273,7 +273,7 @@ vcpu_cleanup(struct vcpu *vcpu, bool destroy)
 	vcpu->cookie = NULL;
 	if (destroy) {
 		vmm_stat_free(vcpu->stats);
-		//fpu_save_area_free(vcpu->guestfpu);
+		fpu_save_area_free(vcpu->guestfpu);
 		vcpu_lock_destroy(vcpu);
 	}
 }
