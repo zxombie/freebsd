@@ -34,17 +34,16 @@
 
 #include <machine/machdep.h>
 #include <machine/vmm.h>
-
 #else
 #include <sys/types.h>
 #include <sys/errno.h>
 #include <sys/_iovec.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 #include <machine/vmm.h>
 
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <vmmapi.h>
 #endif
 

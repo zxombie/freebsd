@@ -68,7 +68,7 @@ vmm_hyp_reg_store(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 		    READ_SPECIALREG(ich_misr_el2);
 		hypctx->vgic_v3_regs.ich_vmcr_el2 =
 		    READ_SPECIALREG(ich_vmcr_el2);
-		switch(hypctx->vgic_v3_regs.ich_lr_num - 1) {
+		switch (hypctx->vgic_v3_regs.ich_lr_num - 1) {
 #define	STORE_LR(x)					\
 	case x:						\
 		hypctx->vgic_v3_regs.ich_lr_el2[x] =	\
@@ -93,7 +93,7 @@ vmm_hyp_reg_store(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 #undef STORE_LR
 		}
 
-		switch(hypctx->vgic_v3_regs.ich_apr_num - 1) {
+		switch (hypctx->vgic_v3_regs.ich_apr_num - 1) {
 #define	STORE_APR(x)						\
 	case x:							\
 		hypctx->vgic_v3_regs.ich_ap0r_el2[x] =		\
@@ -110,7 +110,7 @@ vmm_hyp_reg_store(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 	}
 
 	dfr0 = READ_SPECIALREG(id_aa64dfr0_el1);
-	switch(ID_AA64DFR0_BRPs_VAL(dfr0) - 1) {
+	switch (ID_AA64DFR0_BRPs_VAL(dfr0) - 1) {
 #define	STORE_DBG_BRP(x)						\
 	case x:								\
 		hypctx->dbgbcr_el1[x] =					\
@@ -137,7 +137,7 @@ vmm_hyp_reg_store(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 #undef STORE_DBG_BRP
 	}
 
-	switch(ID_AA64DFR0_WRPs_VAL(dfr0) - 1) {
+	switch (ID_AA64DFR0_WRPs_VAL(dfr0) - 1) {
 #define	STORE_DBG_WRP(x)						\
 	case x:								\
 		hypctx->dbgwcr_el1[x] =					\
@@ -357,7 +357,7 @@ vmm_hyp_reg_restore(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 	}
 
 	dfr0 = READ_SPECIALREG(id_aa64dfr0_el1);
-	switch(ID_AA64DFR0_BRPs_VAL(dfr0) - 1) {
+	switch (ID_AA64DFR0_BRPs_VAL(dfr0) - 1) {
 #define	LOAD_DBG_BRP(x)							\
 	case x:								\
 		WRITE_SPECIALREG(dbgbcr ## x ## _el1,			\
@@ -384,7 +384,7 @@ vmm_hyp_reg_restore(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 #undef LOAD_DBG_BRP
 	}
 
-	switch(ID_AA64DFR0_WRPs_VAL(dfr0) - 1) {
+	switch (ID_AA64DFR0_WRPs_VAL(dfr0) - 1) {
 #define	LOAD_DBG_WRP(x)							\
 	case x:								\
 		WRITE_SPECIALREG(dbgwcr ## x ## _el1,			\
@@ -425,7 +425,7 @@ vmm_hyp_reg_restore(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 		WRITE_SPECIALREG(ich_hcr_el2, hypctx->vgic_v3_regs.ich_hcr_el2);
 		WRITE_SPECIALREG(ich_vmcr_el2,
 		    hypctx->vgic_v3_regs.ich_vmcr_el2);
-		switch(hypctx->vgic_v3_regs.ich_lr_num - 1) {
+		switch (hypctx->vgic_v3_regs.ich_lr_num - 1) {
 #define	LOAD_LR(x)					\
 	case x:						\
 		WRITE_SPECIALREG(ich_lr ## x ##_el2,	\
@@ -450,7 +450,7 @@ vmm_hyp_reg_restore(struct hypctx *hypctx, struct hyp *hyp, bool guest)
 #undef LOAD_LR
 		}
 
-		switch(hypctx->vgic_v3_regs.ich_apr_num - 1) {
+		switch (hypctx->vgic_v3_regs.ich_apr_num - 1) {
 #define	LOAD_APR(x)						\
 	case x:							\
 		WRITE_SPECIALREG(ich_ap0r ## x ##_el2,		\
@@ -507,13 +507,13 @@ vmm_hyp_call_guest(struct hyp *hyp, struct hypctx *hypctx)
 
 	hpfar_valid = true;
 	if (ret == EXCP_TYPE_EL1_SYNC) {
-		switch(ESR_ELx_EXCEPTION(hypctx->tf.tf_esr)) {
+		switch (ESR_ELx_EXCEPTION(hypctx->tf.tf_esr)) {
 		case EXCP_INSN_ABORT_L:
 		case EXCP_DATA_ABORT_L:
 			/*
 			 * The hpfar_el2 register is valid for:
-			 *  - Translaation and Access faults.
-			 *  - Translaation, Access, and permission faults on
+			 *  - Translation and Access faults.
+			 *  - Translation, Access, and permission faults on
 			 *    the translation table walk on the stage 1 tables.
 			 *  - A stage 2 Address size fault.
 			 *
@@ -525,7 +525,7 @@ vmm_hyp_call_guest(struct hyp *hyp, struct hypctx *hypctx)
 			 */
 			if ((hypctx->tf.tf_esr & ISS_DATA_S1PTW) != 0)
 				break;
-			switch(hypctx->tf.tf_esr & ISS_DATA_DFSC_MASK) {
+			switch (hypctx->tf.tf_esr & ISS_DATA_DFSC_MASK) {
 			case ISS_DATA_DFSC_PF_L1:
 			case ISS_DATA_DFSC_PF_L2:
 			case ISS_DATA_DFSC_PF_L3:
@@ -569,7 +569,7 @@ vmm_hyp_call_guest(struct hyp *hyp, struct hypctx *hypctx)
 static uint64_t
 vmm_hyp_read_reg(uint64_t reg)
 {
-	switch(reg) {
+	switch (reg) {
 	case HYP_REG_ICH_VTR:
 		return (READ_SPECIALREG(ich_vtr_el2));
 	case HYP_REG_CNTHCTL:

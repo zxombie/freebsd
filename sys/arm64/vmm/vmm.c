@@ -388,7 +388,6 @@ vm_init(struct vm *vm, bool create)
 
 	CPU_ZERO(&vm->active_cpus);
 	CPU_ZERO(&vm->debug_cpus);
-	//CPU_ZERO(&vm->startup_cpus);
 
 	vm->suspend = 0;
 	CPU_ZERO(&vm->suspended_cpus);
@@ -1574,13 +1573,13 @@ vm_set_register(struct vcpu *vcpu, int reg, uint64_t val)
 
 	vcpu->nextpc = val;
 
-	return(0);
+	return (0);
 }
 
 void *
 vm_get_cookie(struct vm *vm)
 {
-	return vm->cookie;
+	return (vm->cookie);
 }
 
 int
@@ -1681,7 +1680,7 @@ vm_handle_paging(struct vcpu *vcpu, bool *retu)
 	addr = vme->u.paging.gpa;
 	esr = vme->u.paging.esr;
 
-	/* The page exists, but the page table needs to be upddated */
+	/* The page exists, but the page table needs to be updated. */
 	if (pmap_fault(pmap, esr, addr) == KERN_SUCCESS)
 		return (0);
 

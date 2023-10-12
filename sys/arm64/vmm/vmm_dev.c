@@ -24,9 +24,6 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 #include <sys/param.h>
 #include <sys/kernel.h>
 #include <sys/jail.h>
@@ -472,7 +469,7 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 		break;
 
 	case VM_ASSERT_IRQ:
-		vi =(struct vm_irq *)data;
+		vi = (struct vm_irq *)data;
 		error = vm_assert_irq(sc->vm, vi->irq);
 		break;
 	case VM_DEASSERT_IRQ:
@@ -483,7 +480,7 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 		break;
 	}
 
-	switch(cmd) {
+	switch (cmd) {
 	case VM_RUN: {
 		struct vm_exit *vme;
 

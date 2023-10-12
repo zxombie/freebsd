@@ -192,7 +192,7 @@ static uint64_t
 vmm_vtcr_el2_sl(u_int levels)
 {
 #if PAGE_SIZE == PAGE_SIZE_4K
-	switch(levels) {
+	switch (levels) {
 	case 2:
 		return (VTCR_EL2_SL0_4K_LVL2);
 	case 3:
@@ -204,7 +204,7 @@ vmm_vtcr_el2_sl(u_int levels)
 		    levels);
 	}
 #elif PAGE_SIZE == PAGE_SIZE_16K
-	switch(levels) {
+	switch (levels) {
 	case 2:
 		return (VTCR_EL2_SL0_16K_LVL2);
 	case 3:
@@ -661,7 +661,7 @@ handle_el1_sync_excp(struct hypctx *hypctx, struct vm_exit *vme_ret,
 	esr_ec = ESR_ELx_EXCEPTION(hypctx->tf.tf_esr);
 	esr_iss = hypctx->tf.tf_esr & ESR_ELx_ISS_MASK;
 
-	switch(esr_ec) {
+	switch (esr_ec) {
 	case EXCP_UNKNOWN:
 		vmm_stat_incr(hypctx->vcpu, VMEXIT_UNKNOWN, 1);
 		arm64_print_hyp_regs(vme_ret);
