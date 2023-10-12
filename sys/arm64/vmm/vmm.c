@@ -504,15 +504,12 @@ int
 vm_set_topology(struct vm *vm, uint16_t sockets, uint16_t cores,
     uint16_t threads, uint16_t maxcpus)
 {
-	if (maxcpus != 0)
-		return (EINVAL);	/* XXX remove when supported */
+	/* Ignore maxcpus. */
 	if ((sockets * cores * threads) > vm->maxcpus)
 		return (EINVAL);
-	/* XXX need to check sockets * cores * threads == vCPU, how? */
 	vm->sockets = sockets;
 	vm->cores = cores;
 	vm->threads = threads;
-	vm->maxcpus = VM_MAXCPU;	/* XXX temp to keep code working */
 	return(0);
 }
 
