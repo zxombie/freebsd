@@ -460,7 +460,7 @@ build_facs(struct vmctx *const ctx)
 	return (0);
 }
 
-#if defined(__amd64__)
+#ifdef __amd64__
 static int
 build_fadt(struct vmctx *const ctx)
 {
@@ -534,7 +534,6 @@ build_fadt(struct vmctx *const ctx)
 	return (0);
 }
 
-#ifdef __amd64__
 static int
 build_hpet(struct vmctx *const ctx)
 {

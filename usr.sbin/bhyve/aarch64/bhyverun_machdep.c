@@ -41,7 +41,6 @@
 #include "bhyverun.h"
 #include "bootcode.h"
 #include "config.h"
-#include "pci_lpc.h"
 
 /* TODO: Move to a header */
 int fdt_build(struct vmctx *ctx, struct vcpu *bsp, int ncpu);
@@ -63,7 +62,7 @@ bhyve_init_config(void)
 }
 
 void
-bhyve_init_vcpu(struct vcpu *vcpu)
+bhyve_init_vcpu(struct vcpu *vcpu __unused)
 {
 #if 0
 	int err, tmp;
@@ -108,11 +107,11 @@ bhyve_init_vcpu(struct vcpu *vcpu)
 }
 
 void
-bhyve_start_vcpu(struct vcpu *vcpu, bool bsp)
+bhyve_start_vcpu(struct vcpu *vcpu __unused, bool bsp __unused)
 {
+#if 0
 	int error;
 
-#if 0
 	if (bsp) {
 		if (lpc_bootrom()) {
 			error = vm_set_capability(vcpu,
@@ -145,6 +144,7 @@ bhyve_init_platform(struct vmctx *ctx, struct vcpu *bsp __unused)
 {
 	const char *bootrom = NULL;
 	vm_paddr_t pc;
+	int error;
 
 	init_uart(ctx);
 
