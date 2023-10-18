@@ -1493,6 +1493,7 @@ vm_gla2gpa(struct vcpu *vcpu, struct vm_guest_paging *paging,
 	}
 	return (error);
 }
+#endif
 
 int
 vm_gla2gpa_nofault(struct vcpu *vcpu, struct vm_guest_paging *paging,
@@ -1513,26 +1514,6 @@ vm_gla2gpa_nofault(struct vcpu *vcpu, struct vm_guest_paging *paging,
 	}
 	return (error);
 }
-#else
-int
-vm_gla2gpa_nofault(struct vcpu *vcpu, uint64_t gla, int prot, uint64_t *gpa,
-    int *fault)
-{
-	struct vm_gla2gpa gg;
-	int error;
-
-	bzero(&gg, sizeof(struct vm_gla2gpa));
-	gg.prot = prot;
-	gg.gla = gla;
-
-	error = vcpu_ioctl(vcpu, VM_GLA2GPA_NOFAULT, &gg);
-	if (error == 0) {
-		*fault = gg.fault;
-		*gpa = gg.gpa;
-	}
-	return (error);
-}
-#endif
 
 #ifndef min
 #define	min(a,b)	(((a) < (b)) ? (a) : (b))
