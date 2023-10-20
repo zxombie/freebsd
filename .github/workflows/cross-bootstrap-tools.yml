@@ -2,7 +2,7 @@ name: Cross-build Kernel
 
 on:
   push:
-    branches: [ main, 'stable/13' ]
+    branches: [ main, 'stable/13', 'glibc_2.28' ]
   pull_request:
     branches: [ main ]
 
