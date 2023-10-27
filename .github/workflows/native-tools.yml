@@ -23,8 +23,10 @@ jobs:
           operating_system: freebsd
           version: '13.2'
           run: |
-            wd
+            pwd
             ls -lah
             whoami
             env
             freebsd-version
+            pkg install -y llvm16 git-lite
+            make -j$(sysctl -n hw.ncpu) CROSS_TOOLCHAIN=llvm16 WITHOUT_TOOLCHAIN=yes buildkernel TARGET_ARCH=${{ matrix.target_arch }}
