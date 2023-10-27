@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target_arch: [ amd64, aarch64, armv7, i386, powerpc, powerpcspe, powerpc64, powerpc64le, riscv64 ]
+        target_arch: [ amd64, aarch64, armv7, i386, powerpc, powerpc64, riscv64 ]
     steps:
       - uses: actions/checkout@v3
       - name: Build
