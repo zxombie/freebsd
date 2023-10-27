@@ -31,4 +31,4 @@ jobs:
             freebsd-version
             sudo pkg install -y llvm16 git-lite
             mkdir -p ${HOME}/obj
-            env MAKEOBJDIRPREFIX=${HOME}/obj make -j$(sysctl -n hw.ncpu) CROSS_TOOLCHAIN=llvm16 WITHOUT_TOOLCHAIN=yes buildkernel TARGET_ARCH=${{ matrix.target_arch }}
+            env MAKEOBJDIRPREFIX=${HOME}/obj make -j$(sysctl -n hw.ncpu) CROSS_TOOLCHAIN=llvm16 WITHOUT_TOOLCHAIN=yes NO_MODULES=yes buildkernel TARGET_ARCH=${{ matrix.target_arch }}
