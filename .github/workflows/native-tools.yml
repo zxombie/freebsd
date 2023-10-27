@@ -13,12 +13,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Build
-        uses: cross-platform-actions/action@v0.15.0
+        uses: cross-platform-actions/action@v0.21.0
         with:
           operating_system: freebsd
           version: '13.2'
           shell: bash
-          sync_files: vm-to-runner
+          sync_files: runner-to-vm
           run: |
             sudo pkg install -y llvm16 git-lite
             mkdir -p ${HOME}/obj
