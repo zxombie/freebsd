@@ -22,6 +22,7 @@ jobs:
         with:
           operating_system: freebsd
           version: '13.2'
+          shell: bash
           run: |
             pwd
             ls -lah
