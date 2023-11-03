@@ -17,6 +17,7 @@ jobs:
         with:
           operating_system: freebsd
           version: '13.2'
+          memory: 8G
           shell: bash
           sync_files: runner-to-vm
           run: |
