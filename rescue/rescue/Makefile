@@ -1,4 +1,7 @@
 
+# libicp is built without BTI support
+MK_BRANCH_PROTECTION=no
+
 .include <src.opts.mk>
 .include <bsd.linker.mk>
 

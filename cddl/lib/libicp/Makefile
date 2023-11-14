@@ -139,4 +139,7 @@ CFLAGS.sha512-ppc.S = -DLOCORE
 
 LDFLAGS.bfd+= -Wl,-znoexecstack
 
+# sha256-armv8.S and sha512-armv8.S are missing the BTI elf note
+MK_BRANCH_PROTECTION=no
+
 .include <bsd.lib.mk>
