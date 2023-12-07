@@ -157,7 +157,7 @@ bhyve_init_platform(struct vmctx *ctx, struct vcpu *bsp __unused)
 	error = vm_set_register(bsp, VM_REG_GUEST_PC, pc);
 	assert(error == 0);
 	error = vm_attach_vgic(ctx, 0x2f000000UL, 0x10000UL, 0x2f100000UL,
-	    0x20000UL);
+	    (2UL * PAGE_SIZE_64K) * guest_ncpus);
 	assert(error == 0);
 
 	return (0);

@@ -82,7 +82,7 @@ set_single_reg(void *fdt, uint64_t start, uint64_t len)
 }
 
 static void
-add_gic(void *fdt, uint32_t *phandle)
+add_gic(void *fdt, uint32_t *phandle, int ncpu)
 {
 	void *prop;
 
@@ -90,6 +90,7 @@ add_gic(void *fdt, uint32_t *phandle)
 	*phandle = assign_phandle(fdt);
 	fdt_property_string(fdt, "compatible", "arm,gic-v3");
 	fdt_property(fdt, "interrupt-controller", NULL, 0);
+	fdt_property(fdt, "msi-controller", NULL, 0);
 	/* XXX: Needed given the root #address-cells? */
 	fdt_property_u32(fdt, "#address-cells", 2);
 	fdt_property_u32(fdt, "#interrupt-cells", 3);
@@ -99,7 +100,7 @@ add_gic(void *fdt, uint32_t *phandle)
 	SET_PROP_U64(prop, 1, 0x10000);
 	/* GICR */
 	SET_PROP_U64(prop, 2, 0x2f100000);
-	SET_PROP_U64(prop, 3, 0x200000);
+	SET_PROP_U64(prop, 3, 2 * PAGE_SIZE_64K * ncpu);
 
 	fdt_property_placeholder(fdt, "mbi-ranges", 2 * sizeof(uint32_t),
 	    &prop);
@@ -310,7 +311,7 @@ fdt_build(struct vmctx *ctx, struct vcpu *bsp, int ncpu)
 	fdt_property_string(fdt, "method", "hvc");
 	fdt_end_node(fdt);
 
-	add_gic(fdt, &gic_phandle);
+	add_gic(fdt, &gic_phandle, ncpu);
 	fdt_property_u32(fdt, "interrupt-parent", gic_phandle);
 
 	add_timer(fdt, gic_phandle);
