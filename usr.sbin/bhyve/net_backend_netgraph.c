@@ -25,6 +25,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/param.h>
 #ifndef WITHOUT_CAPSICUM
 #include <sys/capsicum.h>
 #endif
@@ -35,6 +36,7 @@
 #include <capsicum_helpers.h>
 #endif
 #include <err.h>
+#include <fcntl.h>
 #include <netgraph.h>
 #include <string.h>
 #include <sysexits.h>
