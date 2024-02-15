@@ -262,8 +262,12 @@ END(mpentry)
 #endif
 
 /*
- * If we are started in EL2, configure the required hypervisor
- * registers and drop to EL1.
+ * Enter the exception level the kernel will use:
+ *
+ *  - If in EL1 continue in EL1
+ *  - If the HCR_E2H field is stuck continue in EL2
+ *  - Configure EL2 to support running the kernel at EL1 and call ERET to
+ *    continue in EL1
  */
 LENTRY(enter_kernel_el)
 	mrs	x23, CurrentEL
@@ -283,6 +287,9 @@ LENTRY(enter_kernel_el)
 	msr	sctlr_el2, x2
 	isb
 
+	/* Set the counter offset to a known value */
+	msr	cntvoff_el2, xzr
+
 	/* Configure the Hypervisor */
 	ldr	x2, =(HCR_RW | HCR_APK | HCR_API)
 	msr	hcr_el2, x2
@@ -290,6 +297,21 @@ LENTRY(enter_kernel_el)
 	/* Stash value of HCR_EL2 for later */
 	isb
 	mrs	x4, hcr_el2
+
+	/* If HCR_EL2.E2H is stuck then continue in EL2 */
+	tst	x4, HCR_E2H
+	b.eq	2f
+
+	/*
+	 * The kernel will be running in EL2, route exceptions here rather
+	 * than EL1.
+	 */
+	orr	x4, x4, #(HCR_TGE)
+	msr	hcr_el2, x4
+	isb
+
+	ret
+2:
 
 	/* Load the Virtualization Process ID Register */
 	mrs	x2, midr_el1
@@ -303,15 +325,7 @@ LENTRY(enter_kernel_el)
 	ldr	x2, .Lsctlr_res1
 	msr	sctlr_el1, x2
 
-	/*
-	 * On some hardware, e.g., Apple M1, we can't clear E2H, so make sure we
-	 * don't trap to EL2 for SIMD register usage to have at least a
-	 * minimally usable system.
-	 */
-	tst	x4, #HCR_E2H
 	mov	x3, #CPTR_RES1	/* HCR_E2H == 0 */
-	mov	x5, #CPTR_FPEN	/* HCR_E2H == 1 */
-	csel	x2, x3, x5, eq
 	msr	cptr_el2, x2
 
 	/* Don't trap to EL2 for CP15 traps */
@@ -321,9 +335,6 @@ LENTRY(enter_kernel_el)
 	mrs	x2, cnthctl_el2
 	orr	x2, x2, #(CNTHCTL_EL1PCTEN | CNTHCTL_EL1PCEN)
 	msr	cnthctl_el2, x2
-
-	/* Set the counter offset to a known value */
-	msr	cntvoff_el2, xzr
 
 	/* Hypervisor trap functions */
 	adrp	x2, hyp_stub_vectors
@@ -342,13 +353,13 @@ LENTRY(enter_kernel_el)
 	ubfx	x2, x2, #ID_AA64PFR0_GIC_SHIFT, #ID_AA64PFR0_GIC_BITS
 	/* GIC[3:0] == 0001 - GIC CPU interface via special regs. supported */
 	cmp	x2, #(ID_AA64PFR0_GIC_CPUIF_EN >> ID_AA64PFR0_GIC_SHIFT)
-	b.ne	2f
+	b.ne	3f
 
 	mrs	x2, icc_sre_el2
 	orr	x2, x2, #ICC_SRE_EL2_EN	/* Enable access from insecure EL1 */
 	orr	x2, x2, #ICC_SRE_EL2_SRE	/* Enable system registers */
 	msr	icc_sre_el2, x2
-2:
+3:
 
 	/* Set the address to return to our return address */
 	msr	elr_el2, x30
