@@ -267,8 +267,9 @@ END(mpentry)
  */
 LENTRY(enter_kernel_el)
 	mrs	x23, CurrentEL
-	lsr	x23, x23, #2
-	cmp	x23, #0x2
+	and	x23, x23, #(CURRENTEL_EL_MASK)
+	lsr	x23, x23, #(CURRENTEL_EL_SHIFT)
+	cmp	x23, #(CURRENTEL_EL_EL2 >> CURRENTEL_EL_SHIFT)
 	b.eq	1f
 	ret
 1:
