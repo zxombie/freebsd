@@ -305,6 +305,9 @@ vmmops_modinit(int ipinum)
 	/* Create the mappings for the hypervisor translation table. */
 	hyp_code_len = round_page(&vmm_hyp_code_end - &vmm_hyp_code);
 
+	/* Invalidate any cached data */
+	cpu_icache_sync_range((void *)&vmm_hyp_code, hyp_code_len);
+
 	/* We need an physical identity mapping for when we activate the MMU */
 	hyp_code_base = vmm_base = vtophys(&vmm_hyp_code);
 	rv = vmmpmap_enter(vmm_base, hyp_code_len, vmm_base,
