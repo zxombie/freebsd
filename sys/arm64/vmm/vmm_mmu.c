@@ -310,8 +310,10 @@ vmmpmap_enter(vm_offset_t va, vm_size_t size, vm_paddr_t pa, vm_prot_t prot)
 
 	while (size > 0) {
 		l3 = vmmpmap_l3_table(va);
-		if (l3 == NULL)
+		if (l3 == NULL) {
+			dsb(ishst);
 			return (false);
+		}
 
 #ifdef INVARIANTS
 		/*
@@ -332,6 +334,8 @@ vmmpmap_enter(vm_offset_t va, vm_size_t size, vm_paddr_t pa, vm_prot_t prot)
 		pa += PAGE_SIZE;
 		va += PAGE_SIZE;
 	}
+
+	dsb(ishst);
 
 	return (true);
 }
