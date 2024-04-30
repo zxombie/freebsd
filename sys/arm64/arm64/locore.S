@@ -212,8 +212,7 @@ END(mpentry_psci)
  * Reads the new CPU ID and passes this to init_secondary.
  */
 ENTRY(mpentry_spintable)
-	adrp	x26, spintable_wait
-	add	x26, x26, :lo12:spintable_wait
+	ldr	x26, =spintable_wait
 	b	mpentry_common
 END(mpentry_spintable)
 
@@ -226,7 +225,6 @@ LENTRY(spintable_wait)
 
 	adrp	x2, ap_cpuid
 1:
-	wfe
 	ldr	x0, [x2, :lo12:ap_cpuid]
 	cmp	x0, x1
 	b.ne	1b
