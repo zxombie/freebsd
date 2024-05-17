@@ -291,6 +291,12 @@ __DEFAULT_NO_OPTIONS+=LLVM_TARGET_BPF LLVM_TARGET_MIPS
 
 .include <bsd.compiler.mk>
 
+.if defined(X_COMPILER_TYPE)
+__CT=${X_COMPILER_TYPE}
+.else
+__CT=${COMPILER_TYPE}
+.endif
+
 .if ${__T} == "i386" || ${__T} == "amd64"
 __DEFAULT_NO_OPTIONS += FDT
 .else
@@ -303,7 +309,9 @@ __DEFAULT_YES_OPTIONS+=LLDB
 __DEFAULT_NO_OPTIONS+=LLDB
 .endif
 # LIB32 is not supported on all 64-bit architectures.
-.if (${__T} == "amd64" || ${__T:Maarch64*} != "" || ${__T} == "powerpc64")
+.if ${__T} == "amd64" || \
+    (${__T:Maarch64*} != "" && ${__CT} == "clang") || \
+    ${__T} == "powerpc64"
 __DEFAULT_YES_OPTIONS+=LIB32
 .else
 BROKEN_OPTIONS+=LIB32
