@@ -3,8 +3,6 @@ PACKAGE=	clibs
 SHLIB_NAME=	libgcc_s.so.1
 SHLIBDIR?=	/lib
 
-SHLIB_LDSCRIPT=libgcc_s.ldscript
-
 # Enabling UBSan triggers "undefined reference to vtable for __cxxabiv1::__function_type_info"
 MK_UBSAN:=	no
 
