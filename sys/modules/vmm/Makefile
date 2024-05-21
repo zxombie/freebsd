@@ -41,11 +41,11 @@ CLEANFILES+=	vmm_hyp_blob.elf vmm_hyp_blob.bin
 
 vmm_hyp_exception.o: vmm_hyp_exception.S
 	${CC} -c -x assembler-with-cpp -DLOCORE \
-		${CFLAGS:N-fsanitize*:N-fno-sanitize*:N-mbranch-protection*} \
+		${CFLAGS:N-fsanitize*:N-fno-sanitize*:N-mbranch-protection*:N-fasan-shadow-offset*} \
 	    ${.IMPSRC} -o ${.TARGET} -fpie
 
 vmm_hyp.o: vmm_hyp.c
-	${CC} -c ${CFLAGS:N-fsanitize*:N-fno-sanitize*:N-mbranch-protection*} \
+	${CC} -c ${CFLAGS:N-fsanitize*:N-fno-sanitize*:N-mbranch-protection*:N-fasan-shadow-offset*} \
 	    ${.IMPSRC} -o ${.TARGET} -fpie
 
 vmm_hyp_blob.elf.full:	vmm_hyp_exception.o vmm_hyp.o
@@ -135,11 +135,11 @@ hyp_genassym.o: offset.inc
 	${CC} -c ${CFLAGS:N-flto:N-fno-common} -fcommon ${.IMPSRC}
 
 vmx_genassym.o: offset.inc
-	${CC} -c ${CFLAGS:N-flto*:N-fno-common:N-fsanitize*:N-fno-sanitize*} \
+	${CC} -c ${CFLAGS:N-flto*:N-fno-common:N-fsanitize*:N-fno-sanitize*:N-fasan-shadow-offset*} \
 	    -fcommon ${.IMPSRC}
 
 svm_genassym.o: offset.inc
-	${CC} -c ${CFLAGS:N-flto*:N-fno-common:N-fsanitize*:N-fno-sanitize*} \
+	${CC} -c ${CFLAGS:N-flto*:N-fno-common:N-fsanitize*:N-fno-sanitize*:N-fasan-shadow-offset*} \
 	    -fcommon ${.IMPSRC}
 
 .include <bsd.kmod.mk>
