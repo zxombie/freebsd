@@ -143,6 +143,7 @@ CFLAGS += -mgeneral-regs-only
 CFLAGS += -ffixed-x18
 # Build with BTI+PAC
 CFLAGS += -mbranch-protection=standard
+LDFLAGS += -Wl,-zbti-report=error
 INLINE_LIMIT?=	8000
 .endif
 
