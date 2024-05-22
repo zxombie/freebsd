@@ -534,7 +534,7 @@ SUBDIR+=	linsysfs
 SUBDIR+=	linux
 .endif
 .if ${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "amd64"
-SUBDIR+=	linux64
+#SUBDIR+=	linux64 # XXX: Clean up for bti-report
 SUBDIR+=	linux_common
 .endif
 
