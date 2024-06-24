@@ -122,6 +122,7 @@ arm64/vmm/vmm_instruction_emul.c		optional vmm
 arm64/vmm/vmm_stat.c				optional vmm
 arm64/vmm/vmm_arm64.c				optional vmm
 arm64/vmm/vmm_reset.c				optional vmm
+arm64/vmm/vmm_handlers.c			optional vmm
 arm64/vmm/vmm_call.S				optional vmm
 arm64/vmm/vmm_hyp_exception.S			optional vmm		\
 	compile-with	"${NORMAL_C:N-fsanitize*:N-fno-sanitize*:N-mbranch-protection*} -fpie"		\
