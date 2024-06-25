@@ -98,6 +98,8 @@
 
 #include <sys/signalvar.h>
 
+#include "qrcode.c"
+
 static MALLOC_DEFINE(M_DUMPER, "dumper", "dumper block buffer");
 
 #ifndef PANIC_REBOOT_WAIT_TIME
@@ -892,6 +894,9 @@ panic(const char *fmt, ...)
 	vpanic(fmt, ap);
 }
 
+
+static uint8_t qrcodeBytes[1024];
+
 void
 vpanic(const char *fmt, va_list ap)
 {
@@ -946,9 +951,24 @@ vpanic(const char *fmt, va_list ap)
 	cn_mute = 0;
 
 	if (newpanic) {
+		QRCode qrcode;
+
 		(void)vsnprintf(buf, sizeof(buf), fmt, ap);
 		panicstr = buf;
 		cngrab();
+		qrcode_initText(&qrcode, qrcodeBytes, 3, ECC_LOW, buf);
+
+		printf("\n");
+		for (uint8_t y = 0; y < qrcode.size; y++) {
+			for (uint8_t x = 0; x < qrcode.size; x++) {
+				if (qrcode_getModule(&qrcode, x, y))
+					printf("  ");
+				else
+					printf("██");
+			}
+			printf("\n");
+		}
+
 		printf("panic: %s\n", buf);
 	} else {
 		printf("panic: ");
