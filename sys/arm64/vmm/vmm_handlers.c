@@ -33,33 +33,39 @@
 #include "arm64.h"
 #include "vmm_handlers.h"
 
-uint64_t
-vmm_read_reg(uint64_t reg)
+#define	VMM_IFUNC(ret_type, name, args)					\
+static ret_type	vmm_nvhe_ ## name args;					\
+DEFINE_IFUNC(, ret_type, vmm_ ## name, args)				\
+{									\
+	if (in_vhe())							\
+		return (vmm_vhe_ ## name);				\
+	return (vmm_nvhe_ ## name);					\
+}									\
+static ret_type								\
+vmm_nvhe_ ## name args
+
+VMM_IFUNC(uint64_t, read_reg, (uint64_t reg))
 {
 	return (vmm_call_hyp(HYP_READ_REGISTER, reg));
 }
 
-uint64_t
-vmm_enter_guest(struct hyp *hyp, struct hypctx *hypctx)
+VMM_IFUNC(uint64_t, enter_guest, (struct hyp *hyp, struct hypctx *hypctx))
 {
 	return (vmm_call_hyp(HYP_ENTER_GUEST, hyp->el2_addr, hypctx->el2_addr));
 }
 
-void
-vmm_clean_s2_tlbi(void)
+VMM_IFUNC(void, clean_s2_tlbi, (void))
 {
 	vmm_call_hyp(HYP_CLEAN_S2_TLBI);
 }
 
-void
-vmm_s2_tlbi_range(uint64_t vttbr, vm_offset_t sva, vm_offset_t eva,
-    bool final_only)
+VMM_IFUNC(void, s2_tlbi_range, (uint64_t vttbr, vm_offset_t sva,
+    vm_offset_t eva, bool final_only))
 {
 	vmm_call_hyp(HYP_S2_TLBI_RANGE, vttbr, sva, eva, final_only);
 }
 
-void
-vmm_s2_tlbi_all(uint64_t vttbr)
+VMM_IFUNC(void, s2_tlbi_all, (uint64_t vttbr))
 {
 	vmm_call_hyp(HYP_S2_TLBI_ALL, vttbr);
 }
