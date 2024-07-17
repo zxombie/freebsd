@@ -54,7 +54,10 @@ struct fdc_data {
 	int	fdc_errs;	/* number of logged errors */
 	struct	bio_queue_head head;
 	struct	bio *bp;	/* active buffer */
-	struct	resource *res_irq, *res_drq;
+	struct	resource *res_irq;
+#if defined(__i386__) || defined(__amd64__)
+	struct	resource *res_drq;
+#endif
 	int	rid_irq, rid_drq;
 #define FDC_MAXREG	8
 	int	ridio[FDC_MAXREG];

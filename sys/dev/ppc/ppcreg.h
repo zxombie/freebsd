@@ -107,7 +107,11 @@ struct ppc_data {
 	device_t ppbus;		/* parallel port chipset corresponding ppbus */
 
   	int rid_irq, rid_drq, rid_ioport;
-	struct resource *res_irq, *res_drq, *res_ioport;
+	struct resource *res_irq;
+#if defined(__i386__) || defined(__amd64__)
+	struct resource *res_drq;
+#endif
+	struct resource *res_ioport;
 
 	void *intr_cookie;
 

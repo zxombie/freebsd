@@ -31,12 +31,11 @@
 #define	_MACHINE_RESOURCE_H_	1
 
 /*
- * Definitions of resource types for Intel Architecture machines
- * with support for legacy ISA devices and drivers.
+ * Definitions of resource types.
  */
 
 #define	SYS_RES_IRQ	1	/* interrupt lines */
-#define	SYS_RES_DRQ	2	/* isa dma lines */
+/* reserved: 2, was SYS_RES_DRQ */
 #define	SYS_RES_MEMORY	3	/* i/o memory */
 #define	SYS_RES_IOPORT	4	/* i/o ports */
 #define	PCI_RES_BUS	5	/* PCI bus numbers */

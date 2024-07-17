@@ -325,6 +325,7 @@ acpi_parse_resource(ACPI_RESOURCE *res, void *context)
 	    res->Data.Irq.InterruptCount, res->Data.Irq.Triggering,
 	    res->Data.Irq.Polarity);
 	break;
+#if defined(__i386__) || defined(__amd64__)
     case ACPI_RESOURCE_TYPE_DMA:
 	/*
 	 * from 1.0b 6.4.3 
@@ -334,6 +335,7 @@ acpi_parse_resource(ACPI_RESOURCE *res, void *context)
 	set->set_drq(dev, arc->context, res->Data.Dma.Channels,
 	    res->Data.Dma.ChannelCount);
 	break;
+#endif
     case ACPI_RESOURCE_TYPE_START_DEPENDENT:
 	ACPI_DEBUG_PRINT((ACPI_DB_RESOURCES, "start dependent functions\n"));
 	set->set_start_dependent(dev, arc->context,
@@ -559,8 +561,10 @@ static void	acpi_res_set_irq(device_t dev, void *context, uint8_t *irq,
 				 int count, int trig, int pol);
 static void	acpi_res_set_ext_irq(device_t dev, void *context,
 				 uint32_t *irq, int count, int trig, int pol);
+#if defined(__i386__) || defined(__amd64__)
 static void	acpi_res_set_drq(device_t dev, void *context, uint8_t *drq,
 				 int count);
+#endif
 static void	acpi_res_set_start_dependent(device_t dev, void *context,
 					     int preference);
 static void	acpi_res_set_end_dependent(device_t dev, void *context);
@@ -574,7 +578,9 @@ struct acpi_parse_resource_set acpi_res_parse_set = {
     acpi_res_set_memoryrange,
     acpi_res_set_irq,
     acpi_res_set_ext_irq,
+#if defined(__i386__) || defined(__amd64__)
     acpi_res_set_drq,
+#endif
     acpi_res_set_start_dependent,
     acpi_res_set_end_dependent
 };
@@ -757,6 +763,7 @@ acpi_res_set_ext_irq(device_t dev, void *context, uint32_t *irq, int count,
     }
 }
 
+#if defined(__i386__) || defined(__amd64__)
 static void
 acpi_res_set_drq(device_t dev, void *context, uint8_t *drq, int count)
 {
@@ -773,6 +780,7 @@ acpi_res_set_drq(device_t dev, void *context, uint8_t *drq, int count)
 	return;
     bus_set_resource(dev, SYS_RES_DRQ, cp->ar_ndrq++, *drq, 1);
 }
+#endif
 
 static void
 acpi_res_set_start_dependent(device_t dev, void *context, int preference)

@@ -51,15 +51,21 @@
 #include <dev/proto/proto_busdma.h>
 
 CTASSERT(SYS_RES_IRQ != PROTO_RES_UNUSED &&
+#if defined(__i386__) || defined(__amd64__)
     SYS_RES_DRQ != PROTO_RES_UNUSED &&
+#endif
     SYS_RES_MEMORY != PROTO_RES_UNUSED &&
     SYS_RES_IOPORT != PROTO_RES_UNUSED);
 CTASSERT(SYS_RES_IRQ != PROTO_RES_PCICFG &&
+#if defined(__i386__) || defined(__amd64__)
     SYS_RES_DRQ != PROTO_RES_PCICFG &&
+#endif
     SYS_RES_MEMORY != PROTO_RES_PCICFG &&
     SYS_RES_IOPORT != PROTO_RES_PCICFG);
 CTASSERT(SYS_RES_IRQ != PROTO_RES_BUSDMA &&
+#if defined(__i386__) || defined(__amd64__)
     SYS_RES_DRQ != PROTO_RES_BUSDMA &&
+#endif
     SYS_RES_MEMORY != PROTO_RES_BUSDMA &&
     SYS_RES_IOPORT != PROTO_RES_BUSDMA);
 
@@ -188,8 +194,10 @@ proto_attach(device_t dev)
 		case SYS_RES_IRQ:
 			/* XXX TODO */
 			break;
+#if defined(__i386__) || defined(__amd64__)
 		case SYS_RES_DRQ:
 			break;
+#endif
 		case SYS_RES_MEMORY:
 		case SYS_RES_IOPORT:
 			r->r_size = rman_get_size(r->r_d.res);
@@ -244,10 +252,12 @@ proto_detach(device_t dev)
 			bus_release_resource(dev, r->r_type, r->r_rid,
 			    r->r_d.res);
 			break;
+#if defined(__i386__) || defined(__amd64__)
 		case SYS_RES_DRQ:
 			bus_release_resource(dev, r->r_type, r->r_rid,
 			    r->r_d.res);
 			break;
+#endif
 		case SYS_RES_MEMORY:
 		case SYS_RES_IOPORT:
 			destroy_dev(r->r_u.cdev);

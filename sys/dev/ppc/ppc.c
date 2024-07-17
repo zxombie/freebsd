@@ -1728,15 +1728,19 @@ ppc_probe(device_t dev, int rid)
 		ppc->res_irq = bus_alloc_resource_any(dev, SYS_RES_IRQ,
 						      &ppc->rid_irq,
 						      RF_SHAREABLE);
+#if defined(__i386__) || defined(__amd64__)
 		ppc->res_drq = bus_alloc_resource_any(dev, SYS_RES_DRQ,
 						      &ppc->rid_drq,
 						      RF_ACTIVE);
+#endif
 	}
 
 	if (ppc->res_irq)
 		ppc->ppc_irq = rman_get_start(ppc->res_irq);
+#if defined(__i386__) || defined(__amd64__)
 	if (ppc->res_drq)
 		ppc->ppc_dmachan = rman_get_start(ppc->res_drq);
+#endif
 
 	ppc->ppc_dev = dev;
 	ppc->ppc_model = GENERIC;
@@ -1763,10 +1767,12 @@ error:
 		bus_release_resource(dev, SYS_RES_IOPORT, ppc->rid_ioport,
 				     ppc->res_ioport);
 	}
+#if defined(__i386__) || defined(__amd64__)
 	if (ppc->res_drq != 0) {
 		bus_release_resource(dev, SYS_RES_DRQ, ppc->rid_drq,
 				     ppc->res_drq);
 	}
+#endif
 	return (ENXIO);
 }
 
@@ -1832,10 +1838,12 @@ ppc_detach(device_t dev)
 		bus_release_resource(dev, SYS_RES_IOPORT, ppc->rid_ioport,
 				     ppc->res_ioport);
 	}
+#if defined(__i386__) || defined(__amd64__)
 	if (ppc->res_drq != 0) {
 		bus_release_resource(dev, SYS_RES_DRQ, ppc->rid_drq,
 				     ppc->res_drq);
 	}
+#endif
 
 	mtx_destroy(&ppc->ppc_lock);
 

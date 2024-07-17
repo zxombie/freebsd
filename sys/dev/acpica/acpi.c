@@ -821,7 +821,9 @@ acpi_print_child(device_t bus, device_t child)
     retval += resource_list_print_type(rl, "port",  SYS_RES_IOPORT, "%#jx");
     retval += resource_list_print_type(rl, "iomem", SYS_RES_MEMORY, "%#jx");
     retval += resource_list_print_type(rl, "irq",   SYS_RES_IRQ,    "%jd");
+#if defined(__i386__) || defined(__amd64__)
     retval += resource_list_print_type(rl, "drq",   SYS_RES_DRQ,    "%jd");
+#endif
     if (device_get_flags(child))
 	retval += printf(" flags %#x", device_get_flags(child));
     retval += bus_print_child_domain(bus, child);
@@ -1175,12 +1177,14 @@ acpi_hint_device_matches_resources(device_t child, const char *name,
 		else
 			return false;
 	}
+#if defined(__i386__) || defined(__amd64__)
 	if (resource_long_value(name, unit, "drq", &value) == 0) {
 		if (acpi_match_resource_hint(child, SYS_RES_DRQ, value))
 			matches = true;
 		else
 			return false;
 	}
+#endif
 	return matches;
 }
 

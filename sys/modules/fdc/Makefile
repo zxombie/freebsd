@@ -2,8 +2,9 @@
 KMOD=	fdc
 
 .PATH:  ${SRCTOP}/sys/dev/fdc
-SRCS=	fdc.c fdc_isa.c
+SRCS=	fdc.c
 .if ${MACHINE} == "i386" || ${MACHINE} == "amd64"
+SRCS+=	fdc_isa.c
 SRCS+=	opt_acpi.h acpi_if.h fdc_acpi.c
 .endif
 

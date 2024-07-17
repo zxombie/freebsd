@@ -95,8 +95,10 @@ proto_isa_alloc(device_t dev, int type, int nrids)
 		proto_add_resource(sc, type, rid, res);
 		count++;
 	}
+#if defined(__i386__) || defined(__amd64__)
 	if (type == SYS_RES_DRQ && count > 0)
 		proto_add_resource(sc, PROTO_RES_BUSDMA, 0, NULL);
+#endif
 	return (count);
 }
 
@@ -105,7 +107,9 @@ proto_isa_attach(device_t dev)
 {
 
 	proto_isa_alloc(dev, SYS_RES_IRQ, ISA_NIRQ);
+#if defined(__i386__) || defined(__amd64__)
 	proto_isa_alloc(dev, SYS_RES_DRQ, ISA_NDRQ);
+#endif
 	proto_isa_alloc(dev, SYS_RES_IOPORT, ISA_NPORT);
 	proto_isa_alloc(dev, SYS_RES_MEMORY, ISA_NMEM);
 	return (proto_attach(dev));

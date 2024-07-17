@@ -423,8 +423,10 @@ struct acpi_parse_resource_set {
 		    int count, int trig, int pol);
     void	(*set_ext_irq)(device_t dev, void *context, uint32_t *irq,
 		    int count, int trig, int pol);
+#if defined(__i386__) || defined(__amd64__)
     void	(*set_drq)(device_t dev, void *context, uint8_t *drq,
 		    int count);
+#endif
     void	(*set_start_dependent)(device_t dev, void *context,
 		    int preference);
     void	(*set_end_dependent)(device_t dev, void *context);
