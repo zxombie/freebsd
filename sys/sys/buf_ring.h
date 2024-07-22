@@ -83,7 +83,17 @@ buf_ring_enqueue(struct buf_ring *br, void *buf)
 	critical_enter();
 	mask = br->br_prod_mask;
 	do {
-		prod_head = br->br_prod_head;
+		/*
+		 * br->br_prod_head needs to be read before br->br_cons_tail.
+		 * If not then we could perform the dequeue and enqueue
+		 * between reading br_cons_tail and reading br_prod_head. This
+		 * could give us values where br_cons_head == br_prod_tail
+		 * (after masking).
+		 *
+		 * To work around this us a load acquire. This is just to
+		 * ensure ordering within this thread.
+		 */
+		prod_head = atomic_load_acq_32(&br->br_prod_head);
 		prod_next = prod_head + 1;
 		cons_tail = atomic_load_acq_32(&br->br_cons_tail);
 
