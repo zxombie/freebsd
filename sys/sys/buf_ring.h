@@ -142,7 +142,7 @@ buf_ring_dequeue_mc(struct buf_ring *br)
 	critical_enter();
 	mask = br->br_cons_mask;
 	do {
-		cons_head = br->br_cons_head;
+		cons_head = atomic_load_acq_32(&br->br_cons_head);
 		cons_next = cons_head + 1;
 		prod_tail = atomic_load_acq_32(&br->br_prod_tail);
 
