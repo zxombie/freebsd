@@ -50,11 +50,12 @@ CLEANFILES+=	vmm_hyp_blob.elf vmm_hyp_blob.bin
 
 vmm_nvhe_exception.o: vmm_nvhe_exception.S
 	${CC} -c -x assembler-with-cpp -DLOCORE \
-	    ${NOSAN_CFLAGS:N-mbranch-protection*} ${.IMPSRC} -o ${.TARGET} -fpie
+	    ${NOSAN_CFLAGS:N-mbranch-protection*} ${DEPEND_CFLAGS} \
+	    ${.IMPSRC} -o ${.TARGET} -fpie
 
 vmm_nvhe.o: vmm_nvhe.c
-	${CC} -c ${NOSAN_CFLAGS:N-mbranch-protection*} ${.IMPSRC} \
-	    -o ${.TARGET} -fpie
+	${CC} -c ${NOSAN_CFLAGS:N-mbranch-protection*} ${DEPEND_CFLAGS} \
+	    ${.IMPSRC} -o ${.TARGET} -fpie
 
 vmm_hyp_blob.elf.full:	vmm_nvhe_exception.o vmm_nvhe.o
 	${LD} -m ${LD_EMULATION} -Bdynamic -L ${SYSDIR}/conf -T ${SYSDIR}/conf/ldscript.arm64 \
