@@ -329,17 +329,27 @@ data_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 	    pmap_fault(map->pmap, esr, far) == KERN_SUCCESS)
 		return;
 
-#ifdef INVARIANTS
 	if (td->td_md.md_spinlock_count != 0) {
+		if (td->td_intr_nesting_level == 0 &&
+		    pcb->pcb_onfault != 0) {
+			frame->tf_elr = pcb->pcb_onfault;
+			return;
+		}
+#ifdef INVARIANTS
 		print_registers(frame);
 		print_gp_register("far", far);
 		printf(" esr: 0x%.16lx\n", esr);
 		panic("data abort with spinlock held (spinlock count %d != 0)",
 		    td->td_md.md_spinlock_count);
-	}
 #endif
+	}
 	if (td->td_critnest != 0 || WITNESS_CHECK(WARN_SLEEPOK |
 	    WARN_GIANTOK, NULL, "Kernel page fault") != 0) {
+		if (td->td_intr_nesting_level == 0 &&
+		    pcb->pcb_onfault != 0) {
+			frame->tf_elr = pcb->pcb_onfault;
+			return;
+		}
 		print_registers(frame);
 		print_gp_register("far", far);
 		printf(" esr: 0x%.16lx\n", esr);
