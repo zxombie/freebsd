@@ -271,9 +271,3 @@ efi_arch_leave(void)
 		invalidate_local_icache();
 }
 
-int
-efi_rt_arch_call(struct efirt_callinfo *ec)
-{
-
-	panic("not implemented");
-}
