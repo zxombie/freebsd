@@ -1,7 +1,6 @@
 .include <src.opts.mk>
 
 SUBDIR=adjkerntz \
-	camcontrol \
 	clri \
 	comcontrol \
 	conscontrol \
