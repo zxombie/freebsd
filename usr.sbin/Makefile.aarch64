@@ -2,6 +2,6 @@
 SUBDIR+=	acpi
 .endif
 .if ${MK_BHYVE} != "no"
-SUBDIR+=	bhyve
-SUBDIR+=	bhyvectl
+#SUBDIR+=	bhyve
+#SUBDIR+=	bhyvectl
 .endif

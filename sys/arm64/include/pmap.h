@@ -38,14 +38,15 @@
 #ifndef _MACHINE_PMAP_H_
 #define	_MACHINE_PMAP_H_
 
-#include <machine/pte.h>
+
+//#include <machine/pte.h>
 
 #ifndef LOCORE
 
 #include <sys/queue.h>
 #include <sys/_lock.h>
 #include <sys/_mutex.h>
-#include <sys/_pv_entry.h>
+//#include <sys/_pv_entry.h>
 
 #include <vm/_vm_radix.h>
 
@@ -82,7 +83,7 @@ struct pmap {
 	struct pmap_statistics	pm_stats;	/* pmap statistics */
 	uint64_t		pm_ttbr;
 	vm_paddr_t		pm_l0_paddr;
-	pd_entry_t		*pm_l0;
+	void			*pm_l0;
 	TAILQ_HEAD(,pv_chunk)	pm_pvchunk;	/* list of mappings in pmap */
 	struct vm_radix		pm_root;	/* spare page table pages */
 	long			pm_cookie;	/* encodes the pmap's ASID */
@@ -124,6 +125,7 @@ extern struct pmap	kernel_pmap_store;
 
 #define	PMAP_WANT_ACTIVE_CPUS_NAIVE
 
+#if 0
 extern vm_offset_t virtual_avail;
 extern vm_offset_t virtual_end;
 
@@ -188,6 +190,8 @@ struct arm64_bootparams;
 void	pmap_bootstrap_san(void);
 void	pmap_san_enter(vm_offset_t);
 #endif
+
+#endif /* 0 */
 
 #endif	/* _KERNEL */
 

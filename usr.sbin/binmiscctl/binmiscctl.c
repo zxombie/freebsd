@@ -25,6 +25,7 @@
  *
  */
 
+#define PAGE_SIZE_HACK 1
 #include <sys/types.h>
 #include <sys/imgact_binmisc.h>
 #include <sys/linker.h>

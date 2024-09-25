@@ -6,6 +6,7 @@ SRCS=	cmds.c cmdtab.c devs.c fetch.c iolat.c iostat.c keyboard.c main.c sysput.c
 	mode.c ip.c sctp.c tcp.c zarc.c \
 	vmstat.c convtbl.c ifcmds.c ifstat.c
 
+CFLAGS+=-DPAGE_SIZE_HACK
 .if ${MK_INET6_SUPPORT} != "no"
 SRCS+=	icmp6.c ip6.c
 CFLAGS+= -DINET6

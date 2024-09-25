@@ -5,6 +5,7 @@ SRCS=	vmmapi.c
 INCS=	vmmapi.h
 
 CFLAGS+= -I${.CURDIR}
+CFLAGS+=-DPAGE_SIZE_HACK
 
 .PATH:	${.CURDIR}/${MACHINE_CPUARCH}
 

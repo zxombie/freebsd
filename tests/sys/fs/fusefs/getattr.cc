@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#define PAGE_SIZE_HACK 1
 extern "C" {
 #include <sys/param.h>
 

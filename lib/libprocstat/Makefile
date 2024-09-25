@@ -17,6 +17,7 @@ SYMBOL_MAPS=	${.CURDIR}/Symbol.map
 INCS=		libprocstat.h
 CFLAGS+=	-I. -I${.CURDIR} -D_KVM_VNODE
 SHLIB_MAJOR=	1
+CFLAGS+=-DPAGE_SIZE_HACK
 
 LIBADD=		elf kvm util
 

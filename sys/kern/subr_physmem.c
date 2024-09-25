@@ -26,6 +26,7 @@
  * SUCH DAMAGE.
  */
 
+#define PAGE_SIZE_HACK 1
 #include <sys/cdefs.h>
 #ifdef _KERNEL
 #include "opt_acpi.h"

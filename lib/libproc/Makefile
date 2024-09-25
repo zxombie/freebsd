@@ -11,6 +11,7 @@ SRCS=	proc_bkpt.c		\
 
 INCS=	libproc.h
 
+CFLAGS+=-DPAGE_SIZE_HACK
 CFLAGS+=	-I${.CURDIR}
 
 LIBADD+=	cxxrt elf procstat rtld_db util z

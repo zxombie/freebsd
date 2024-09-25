@@ -31,6 +31,7 @@
  * SUCH DAMAGE.
  */
 
+#define PAGE_SIZE_HACK 1
 #include <sys/cdefs.h>
 /*
  * This file has routines used to print out system calls and their

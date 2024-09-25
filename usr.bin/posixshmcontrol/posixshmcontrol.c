@@ -25,7 +25,8 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-
+ 
+#define PAGE_SIZE_HACK 1
 #include <sys/param.h>
 #include <sys/filio.h>
 #include <sys/mman.h>

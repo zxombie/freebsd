@@ -105,12 +105,14 @@
  * When PAGE_SIZE is 16KB, an allocation size of 32MB is supported.  This
  * size is used by level 0 reservations and L2 BLOCK mappings.
  */
+#ifdef PAGE_SIZE_HACK
 #if PAGE_SIZE == PAGE_SIZE_4K
 #define	VM_NFREEORDER		13
 #elif PAGE_SIZE == PAGE_SIZE_16K
 #define	VM_NFREEORDER		12
 #else
 #error Unsupported page size
+#endif
 #endif
 
 /*
@@ -125,6 +127,7 @@
  * pages when PAGE_SIZE is 16KB.  Level 1 reservations consist of 32 64KB
  * pages when PAGE_SIZE is 4KB, and 16 2M pages when PAGE_SIZE is 16KB.
  */
+#ifdef PAGE_SIZE_HACK
 #if PAGE_SIZE == PAGE_SIZE_4K
 #ifndef	VM_LEVEL_0_ORDER
 #define	VM_LEVEL_0_ORDER	4
@@ -141,6 +144,7 @@
 #endif
 #else
 #error Unsupported page size
+#endif
 #endif
 
 /**

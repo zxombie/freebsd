@@ -19,6 +19,7 @@ LIBC_ARCH=${MACHINE_CPUARCH}
 .endif
 
 CFLAGS+=-D_FORTIFY_SOURCE_read=_read
+CFLAGS+=-DPAGE_SIZE_HACK
 
 # All library objects contain FreeBSD revision strings by default; they may be
 # excluded as a space-saving measure.  To produce a library that does

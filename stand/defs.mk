@@ -80,6 +80,8 @@ LIBSA32=	${LIBSA}
 LIBSA32=	${BOOTOBJ}/libsa32/libsa32.a
 .endif
 
+CFLAGS+=-DPAGE_SIZE_HACK
+
 # Standard options:
 CFLAGS+=	-nostdinc
 # Allow CFLAGS_EARLY.file/target so that code that needs specific stack

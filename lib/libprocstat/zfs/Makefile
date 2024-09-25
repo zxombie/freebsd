@@ -3,6 +3,7 @@
 SRCS=	zfs_defs.c
 OBJS=	zfs_defs.o
 WARNS?=	1
+CFLAGS+=-DPAGE_SIZE_HACK
 
 FORTIFY_SOURCE=	0
 

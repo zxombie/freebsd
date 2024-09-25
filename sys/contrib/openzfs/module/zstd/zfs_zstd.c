@@ -39,6 +39,7 @@
  *     under sponsorship from the FreeBSD Foundation.
  */
 
+#define PAGE_SIZE_HACK 1
 #include <sys/param.h>
 #include <sys/sysmacros.h>
 #include <sys/zfs_context.h>

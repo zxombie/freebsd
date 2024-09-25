@@ -8,6 +8,7 @@ PACKAGE=	runtime
 
 LIB=	util
 SHLIB_MAJOR= 9
+CFLAGS+=-DPAGE_SIZE_HACK
 
 SRCS=	_secure_path.c auth.c cpuset.c expand_number.c flopen.c fparseln.c \
 	ftime.c getlocalbase.c gr_util.c \

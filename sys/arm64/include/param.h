@@ -93,9 +93,11 @@
 #define	PAGE_SHIFT_64K	16
 #define	PAGE_SIZE_64K	(1 << PAGE_SHIFT_64K)
 
+#if defined(PAGE_SIZE_HACK)
 #define	PAGE_SHIFT	PAGE_SHIFT_4K
 #define	PAGE_SIZE	(1 << PAGE_SHIFT)
 #define	PAGE_MASK	(PAGE_SIZE - 1)
+#endif
 
 #define	MAXPAGESIZES	4		/* maximum number of supported page sizes */
 

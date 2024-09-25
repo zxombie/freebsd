@@ -4,6 +4,7 @@ PACKAGE=	runtime
 SHLIBDIR?= /lib
 SHLIB_MAJOR=	7
 CFLAGS+=-DNO__SCCSID -I${.CURDIR}
+CFLAGS+=-DPAGE_SIZE_HACK
 
 SRCS=	kvm.c kvm_cptime.c kvm_getloadavg.c \
 	kvm_getswapinfo.c kvm_pcpu.c kvm_private.c kvm_proc.c kvm_vnet.c \

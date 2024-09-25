@@ -7,6 +7,7 @@ MAN=		librtld_db.3
 SRCS=		rtld_db.c
 INCS=		rtld_db.h
 
+CFLAGS+=-DPAGE_SIZE_HACK
 CFLAGS+= -I${.CURDIR}
 # Avoid circular dependency, we only need the libproc.h header here.
 CFLAGS+= -I${.CURDIR:H}/libproc
