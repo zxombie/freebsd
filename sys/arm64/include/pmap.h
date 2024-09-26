@@ -38,15 +38,18 @@
 #ifndef _MACHINE_PMAP_H_
 #define	_MACHINE_PMAP_H_
 
-
-//#include <machine/pte.h>
+#if defined(PAGE_SIZE_HACK)
+#include <machine/pte.h>
+#endif
 
 #ifndef LOCORE
 
 #include <sys/queue.h>
 #include <sys/_lock.h>
 #include <sys/_mutex.h>
-//#include <sys/_pv_entry.h>
+#if defined(PAGE_SIZE_HACK)
+#include <sys/_pv_entry.h>
+#endif
 
 #include <vm/_vm_radix.h>
 
@@ -83,7 +86,11 @@ struct pmap {
 	struct pmap_statistics	pm_stats;	/* pmap statistics */
 	uint64_t		pm_ttbr;
 	vm_paddr_t		pm_l0_paddr;
+#if defined(PAGE_SIZE_HACK)
+	pd_entry_t		*pm_l0;
+#else
 	void			*pm_l0;
+#endif
 	TAILQ_HEAD(,pv_chunk)	pm_pvchunk;	/* list of mappings in pmap */
 	struct vm_radix		pm_root;	/* spare page table pages */
 	long			pm_cookie;	/* encodes the pmap's ASID */
@@ -125,7 +132,7 @@ extern struct pmap	kernel_pmap_store;
 
 #define	PMAP_WANT_ACTIVE_CPUS_NAIVE
 
-#if 0
+#ifdef _KERNEL
 extern vm_offset_t virtual_avail;
 extern vm_offset_t virtual_end;
 

@@ -148,6 +148,7 @@ LDFLAGS += -Wl,-zbti-report=error
 .endif
 # TODO: support outline atomics
 CFLAGS += -mno-outline-atomics
+CFLAGS += -DPAGE_SIZE_HACK
 INLINE_LIMIT?=	8000
 .endif
 

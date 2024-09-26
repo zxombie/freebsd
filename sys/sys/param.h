@@ -193,10 +193,12 @@
 
 #define MCLBYTES	(1 << MCLSHIFT)	/* size of an mbuf cluster */
 
+#if defined(PAGE_SIZE_HACK)
 #if PAGE_SIZE <= 8192
 #define	MJUMPAGESIZE	PAGE_SIZE
 #else
 #define	MJUMPAGESIZE	(8 * 1024)
+#endif
 #endif
 
 #define	MJUM9BYTES	(9 * 1024)	/* jumbo cluster 9k */
