@@ -48,7 +48,6 @@ SUBDIR=adjkerntz \
 	newfs_msdos \
 	nfsiod \
 	nos-tun \
-	nvmecontrol \
 	pfilctl \
 	rcorder \
 	reboot \
