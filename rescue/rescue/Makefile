@@ -89,7 +89,7 @@ CRUNCH_SUPPRESS_LINK_-tcsh= 1
 #
 CRUNCH_SRCDIRS+= sbin
 CRUNCH_PROGS_sbin= 						\
-	camcontrol clri devfs dmesg dump			\
+	clri devfs dmesg dump			\
 	dumpfs dumpon fsck fsck_ffs fsck_msdosfs fsdb		\
 	fsirand geom ifconfig init 				\
 	kldconfig kldload kldstat kldunload ldconfig 		\
@@ -143,7 +143,6 @@ CRUNCH_PROGS_usr.sbin+= zdb
 # CRUNCH_PROGS+= devd
 
 CRUNCH_LIBS+= -l80211 -lalias -lcam -lncursesw -ldevstat -lipsec -llzma
-CRUNCH_LIBS_camcontrol+= ${LIBNVMF}
 .if ${MK_ZFS} != "no"
 CRUNCH_LIBS+= -lavl -lpthread -luutil -lumem -ltpool -lspl -lrt
 CRUNCH_LIBS_zfs+=	${LIBBE} \
