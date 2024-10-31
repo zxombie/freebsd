@@ -53,7 +53,7 @@ struct acpi_gpiobus_ivar
 {
 	struct gpiobus_ivar	gpiobus;	/* Must come first */
 	ACPI_HANDLE		dev_handle;	/* ACPI handle for bus */
-	struct gpiobus_pin	pin;		/* Pin for _AEI */
+	uint32_t		flags;
 };
 
 static uint32_t
@@ -148,6 +148,33 @@ acpi_gpiobus_enumerate_res(ACPI_RESOURCE *res, void *context)
 	return (AE_OK);
 }
 
+static struct acpi_gpiobus_ivar *
+acpi_gpiobus_setup_devinfo(device_t bus, device_t child,
+    ACPI_RESOURCE_GPIO *gpio_res)
+{
+	struct acpi_gpiobus_ivar *devi;
+
+	devi = malloc(sizeof(*devi), M_DEVBUF, M_NOWAIT | M_ZERO);
+	if (devi == NULL)
+		return (NULL);
+	resource_list_init(&devi->gpiobus.rl);
+
+	devi->flags = acpi_gpiobus_convflags(gpio_res);
+	if (acpi_quirks & ACPI_Q_AEI_NOPULL)
+		devi->flags &= ~GPIO_PIN_PULLUP;
+
+	devi->gpiobus.npins = 1;
+	if (gpiobus_alloc_ivars(&devi->gpiobus) != 0) {
+		free(devi, M_DEVBUF);
+		return (NULL);
+	}
+
+	for (int i = 0; i < devi->gpiobus.npins; i++)
+		devi->gpiobus.pins[i] = gpio_res->PinTable[i];
+
+	return (devi);
+}
+
 static ACPI_STATUS
 acpi_gpiobus_enumerate_aei(ACPI_RESOURCE *res, void *context)
 {
@@ -167,30 +194,20 @@ acpi_gpiobus_enumerate_aei(ACPI_RESOURCE *res, void *context)
 	child = device_add_child_ordered(bus, 0, "gpio_aei", DEVICE_UNIT_ANY);
 	if (child == NULL)
 		return (AE_OK);
-	devi = malloc(sizeof(*devi), M_DEVBUF, M_NOWAIT | M_ZERO);
+	devi = acpi_gpiobus_setup_devinfo(bus, child, gpio_res);
 	if (devi == NULL) {
 		device_delete_child(bus, child);
 		return (AE_OK);
 	}
-	resource_list_init(&devi->gpiobus.rl);
 	device_set_ivars(child, devi);
 
-	/*
-	 * Set pin information in bus-managed variables.  We need to do
-	 * this in two different ways because the device needs the
-	 * gpiobus_pin structure to set up interrupts.
-	 */
-	devi->pin.pin = gpio_res->PinTable[0];
-	devi->pin.flags = acpi_gpiobus_convflags(gpio_res);
-	if (acpi_quirks & ACPI_Q_AEI_NOPULL)
-		devi->pin.flags &= ~GPIO_PIN_PULLUP;
-	devi->pin.dev = device_get_parent(bus);
-	gpiobus_set_npins(child, 1);
-	gpiobus_set_pins(child, &devi->pin.pin);
-	if (GPIOBUS_PIN_SETFLAGS(bus, child, 0, devi->pin.flags)) {
-		gpiobus_release_pin(bus, devi->pin.pin);
-		device_delete_child(bus, child);
-		return (AE_OK);
+	for (int i = 0; i < devi->gpiobus.npins; i++) {
+		if (GPIOBUS_PIN_SETFLAGS(bus, child, 0, devi->flags)) {
+			gpiobus_free_ivars(&devi->gpiobus);
+			free(devi, M_DEVBUF);
+			device_delete_child(bus, child);
+			return (AE_OK);
+		}
 	}
 
 	/* Pass ACPI information to children. */
@@ -364,6 +381,23 @@ acpi_gpiobus_detach(device_t dev)
 	return (gpiobus_detach(dev));
 }
 
+int
+gpio_pin_get_by_acpi_index(device_t consumer, uint32_t idx,
+    gpio_pin_t *out_pin)
+{
+	struct acpi_gpiobus_ivar *devi;
+	int rv;
+
+	rv = gpio_pin_get_by_child_index(consumer, idx, out_pin);
+	if (rv != 0)
+		return (rv);
+
+	devi = device_get_ivars(consumer);
+	(*out_pin)->flags = devi->flags;
+
+	return (0);
+}
+
 static int
 acpi_gpiobus_read_ivar(device_t dev, device_t child, int which, uintptr_t *result)
 {
@@ -372,9 +406,6 @@ acpi_gpiobus_read_ivar(device_t dev, device_t child, int which, uintptr_t *resul
 	switch (which) {
 	case ACPI_GPIOBUS_IVAR_HANDLE:
 		*result = (uintptr_t)devi->dev_handle;
-		break;
-	case ACPI_GPIOBUS_IVAR_PIN:
-		*result = (uintptr_t)&devi->pin;
 		break;
 	default:
 		return (gpiobus_read_ivar(dev, child, which, result));

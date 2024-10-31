@@ -150,6 +150,11 @@ int gpio_pin_get_by_ofw_propidx(device_t consumer, phandle_t node,
     char *name, int idx, gpio_pin_t *gpio);
 #endif /* FDT */
 
+#ifdef DEV_ACPI
+int gpio_pin_get_by_acpi_index(device_t consumer, uint32_t idx,
+    gpio_pin_t *out_pin);
+#endif /* DEV_ACPI */
+
 /* Acquire a pin by bus and pin number. */
 int gpio_pin_get_by_bus_pinnum(device_t _bus, uint32_t _pinnum, gpio_pin_t *_gp);
 

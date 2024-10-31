@@ -68,11 +68,18 @@ static int
 gpio_aei_attach(device_t dev)
 {
 	struct gpio_aei_softc * sc = device_get_softc(dev);
-	struct gpiobus_pin * pin = acpi_gpiobus_get_pin(dev);
+	gpio_pin_t pin;
 	int err;
 
 	/* This is us. */
 	device_set_desc(dev, "ACPI Event Information Device");
+
+	/* Store parameters needed by gpio_aei_intr. */
+	sc->handle = acpi_gpiobus_get_handle(dev);
+	if (gpio_pin_get_by_acpi_index(dev, 0, &pin) != 0) {
+		device_printf(dev, "Unable to get the input pin\n");
+		return (ENXIO);
+	}
 
 	/* Support for GPIO pins > 255 is not implemented. */
 	if (pin->pin > 255) {
