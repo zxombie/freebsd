@@ -105,7 +105,8 @@ CFLAGS+=	-fno-semantic-interposition
 CFLAGS+=	-fvisibility-inlines-hidden
 CFLAGS+=	-fvisibility=hidden
 
-.if ${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} < 130000
+.if (${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} < 130000) || \
+    (${COMPILER_TYPE} == "clang" && ${COMPILER_VERSION} < 170000)
 # NOTE: gcc 12 cannot correctly compile all libc++'s C++23 code. To temporarily
 # support gcc 12, compile libc++ in C++20 mode, but this will leave out any
 # C++23 features.
