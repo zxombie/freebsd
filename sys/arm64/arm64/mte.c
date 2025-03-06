@@ -171,6 +171,68 @@ mte_copy_tags(vm_page_t srcpage, vm_page_t dstpage, vm_offset_t src, vm_offset_t
 	}
 }
 
+static cpu_feat_en
+mte_check(const struct cpu_feat *feat __unused, u_int midr __unused)
+{
+	uint64_t id_aa64pfr1;
+
+	if (!get_kernel_reg(ID_AA64PFR1_EL1, &id_aa64pfr1))
+		return (FEAT_ALWAYS_DISABLE);
+	if (ID_AA64PFR1_MTE_VAL(id_aa64pfr1) == ID_AA64PFR1_MTE_NONE)
+		return (FEAT_ALWAYS_DISABLE);
+	return (FEAT_DEFAULT_ENABLE);
+}
+
+static bool
+mte_enable(const struct cpu_feat *feat __unused,
+    cpu_feat_errata errata_status __unused, u_int *errata_list __unused,
+    u_int errata_count __unused)
+{
+	uint64_t mair;
+
+	/*
+	 * The VM_MEMATTR_TAGGED is initially configured as MAIR_NORMAL_WB,
+	 * as not all systems have MTE. This can now be reconfigured as
+	 * MAIR_NORMAL_TAGGED.
+	 */
+	mair = READ_SPECIALREG(MAIR_EL1);
+	WRITE_SPECIALREG(MAIR_EL1,
+		(mair & ~MAIR_ATTR_MASK(VM_MEMATTR_TAGGED)) |
+		MAIR_ATTR(MAIR_NORMAL_TG, VM_MEMATTR_TAGGED));
+	WRITE_SPECIALREG(sctlr_el1,
+	    READ_SPECIALREG(sctlr_el1) | SCTLR_ATA | SCTLR_ATA0);
+	isb();
+
+	/* Invalidate the TLB to ensure it picks up the new attribute */
+	/*
+	 * TODO AT: Either move away from tagging the DMAP, or make this
+	 * local only
+	 */
+	pmap_s1_invalidate_all_kernel();
+
+	mte_enabled = true;
+
+	return (true);
+}
+
+static void
+mte_disabled(const struct cpu_feat *feat __unused)
+{
+	/*
+	 * MTE may be disabled, mask out the ID fields we expose to
+	 * userspace and the rest of the kernel so they don't try to
+	 * use it.
+	 */
+	if (PCPU_GET(cpuid) == 0) {
+		update_special_reg(ID_AA64PFR1_EL1, ID_AA64PFR1_MTE_MASK, 0);
+	}
+
+}
+
+CPU_FEAT(feat_mte, "Memory Tagging",
+    mte_check, NULL, mte_enable, mte_disabled,
+    CPU_FEAT_AFTER_DEV | CPU_FEAT_PER_CPU);
+
 void
 mte_fork(struct thread *new_td, struct thread *orig_td)
 {

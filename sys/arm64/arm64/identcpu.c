@@ -1838,6 +1838,11 @@ static const struct mrs_field_value id_aa64pfr1_mte[] = {
 	MRS_FIELD_VALUE_END,
 };
 
+static const struct mrs_field_hwcap id_aa64pfr1_mte_caps[] = {
+	MRS_HWCAP(1, HWCAP2_MTE, ID_AA64PFR1_MTE_MTE),
+	MRS_HWCAP_END
+};
+
 static const struct mrs_field_value id_aa64pfr1_ssbs[] = {
 	MRS_FIELD_VALUE(ID_AA64PFR1_SSBS_NONE, ""),
 	MRS_FIELD_VALUE(ID_AA64PFR1_SSBS_PSTATE, "PSTATE.SSBS"),
@@ -1878,7 +1883,8 @@ static const struct mrs_field id_aa64pfr1_fields[] = {
 	    id_aa64pfr1_mpam_frac),
 	MRS_FIELD(ID_AA64PFR1, RAS_frac, false, MRS_LOWER, 0,
 	    id_aa64pfr1_ras_frac),
-	MRS_FIELD(ID_AA64PFR1, MTE, false, MRS_LOWER, 0, id_aa64pfr1_mte),
+	MRS_FIELD_HWCAP(ID_AA64PFR1, MTE, false, MRS_LOWER, MRS_USERSPACE,
+			id_aa64pfr1_mte, id_aa64pfr1_mte_caps),
 	MRS_FIELD_HWCAP(ID_AA64PFR1, SSBS, false, MRS_LOWER, MRS_USERSPACE,
 	    id_aa64pfr1_ssbs, id_aa64pfr1_ssbs_caps),
 	MRS_FIELD_HWCAP(ID_AA64PFR1, BT, false, MRS_LOWER,
