@@ -72,6 +72,48 @@ mte_update_sctlr(struct thread *td, uint64_t sctlr)
 	td->td_pcb->pcb_sctlr |= sctlr;
 }
 
+int
+mte_sysarch_ctrl(struct thread *td, uint64_t flags)
+{
+	uint64_t mask, sctlr;
+
+	if (!mte_enabled)
+		return (0);
+
+	/* TODO: SYSARCH_MTE_ENABLE */
+
+	switch (flags & SYSARCH_MTE_TCF_MASK) {
+	case SYSARCH_MTE_TCF_NONE:
+		sctlr = SCTLR_TCF0_NONE;
+		break;
+	case SYSARCH_MTE_TCF_SYNC:
+		sctlr = SCTLR_TCF0_SYNC;
+		break;
+	case SYSARCH_MTE_TCF_ASYNC:
+		sctlr = SCTLR_TCF0_ASYNC;
+		break;
+	default:
+		/* TODO: Support FEAT_MTE_ASYM_FAULT */
+		return (EINVAL);
+	}
+
+	/* Tag Exclusion Mask */
+	mask = (flags & SYSARCH_MTE_EXCLUDE_MASK) >> SYSARCH_MTE_EXCLUDE_SHIFT;
+	td->td_md.md_gcr = mask << GCR_Exclude_SHIFT | GCR_RRND;
+	/* MTE mode */
+	mte_update_sctlr(td, sctlr);
+
+	if (td == curthread) {
+		printf("writing new sctlr val: 0x%lx\n", sctlr);
+		WRITE_SPECIALREG(sctlr_el1,
+		    (READ_SPECIALREG(sctlr_el1) & ~SCTLR_USER_MASK) | sctlr);
+		WRITE_SPECIALREG(GCR_EL1_REG, td->td_md.md_gcr);
+		isb();
+	}
+
+	return (0);
+}
+
 /**
  * Clear/sync the allocation tags for a given page. This should be done on
  * allocation of a page to ensure a tag check fault does not occur immediately

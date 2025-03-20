@@ -47,6 +47,7 @@ int
 sysarch(struct thread *td, struct sysarch_args *uap)
 {
 	struct arm64_guard_page_args gp_args;
+	uint64_t flags;
 	struct pcb *pcb;
 	vm_offset_t eva;
 	unsigned long sve_len;
@@ -78,6 +79,14 @@ sysarch(struct thread *td, struct sysarch_args *uap)
 
 		error = pmap_bti_set(vmspace_pmap(td->td_proc->p_vmspace),
 		    trunc_page(gp_args.addr), round_page(eva));
+
+		break;
+	case ARM64_MTE_CTRL:
+		error = copyin(uap->parms, &flags, sizeof(uint64_t));
+		if (error != 0)
+			return (error);
+
+		error = mte_sysarch_ctrl(td, flags);
 		break;
 	case ARM64_GET_SVE_VL:
 		pcb = td->td_pcb;

@@ -51,6 +51,24 @@ struct arm64_guard_page_args {
 #define	ARM64_GET_SVE_VL	0x200
 /* Reserved ARM64_SET_SVE_VL	0x201 */
 
+/* MTE */
+#define	ARM64_MTE_CTRL		0x300	/* MTE Configuration */
+
+/* Enable MTE */
+#define	SYSARCH_MTE_ENABLE		0x1
+
+/* Tag Check Fault control */
+#define	SYSARCH_MTE_TCF_SHIFT	1
+#define	SYSARCH_MTE_TCF_MASK	(0x3 << SYSARCH_MTE_TCF_SHIFT)
+#define	SYSARCH_MTE_TCF_NONE	(0x0 << SYSARCH_MTE_TCF_SHIFT)
+#define	SYSARCH_MTE_TCF_SYNC	(0x1 << SYSARCH_MTE_TCF_SHIFT)
+#define	SYSARCH_MTE_TCF_ASYNC	(0x2 << SYSARCH_MTE_TCF_SHIFT)
+
+/* Tag Exclusion mask */
+#define	SYSARCH_MTE_EXCLUDE_SHIFT	0x3
+#define	SYSARCH_MTE_EXCLUDE_MASK	(0xffffUL << SYSARCH_MTE_EXCLUDE_SHIFT)
+
+
 #ifndef _KERNEL
 
 __BEGIN_DECLS

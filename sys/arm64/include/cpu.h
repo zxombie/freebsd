@@ -278,6 +278,11 @@ void	ptrauth_mp_start(uint64_t);
 #endif
 
 /* Memory Tagging Extension (MTE) support */
+#define MTE_SET_TCF_NONE	0
+#define MTE_SET_TCF_SYNC	1
+#define MTE_SET_TCF_ASYNC	2
+
+int	mte_is_enabled(void);
 void	mte_fork(struct thread *, struct thread *);
 void	mte_exec(struct thread *);
 void	mte_copy_thread(struct thread *, struct thread *);
@@ -286,6 +291,8 @@ void	mte_thread0(struct thread *);
 
 void	mte_sync_tags(vm_page_t page);
 void	mte_copy_tags(vm_page_t, vm_page_t, vm_offset_t, vm_offset_t);
+
+int mte_sysarch_ctrl(struct thread *, uint64_t);
 
 /* Functions to read the sanitised view of the special registers */
 void	update_special_regs(u_int);
