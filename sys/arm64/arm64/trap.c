@@ -94,6 +94,7 @@ typedef void (abort_handler)(struct thread *, struct trapframe *, uint64_t,
 static abort_handler align_abort;
 static abort_handler data_abort;
 static abort_handler external_abort;
+static abort_handler tag_check_abort;
 
 static abort_handler *abort_handlers[] = {
 	[ISS_DATA_DFSC_TF_L0] = data_abort,
@@ -106,6 +107,7 @@ static abort_handler *abort_handlers[] = {
 	[ISS_DATA_DFSC_PF_L1] = data_abort,
 	[ISS_DATA_DFSC_PF_L2] = data_abort,
 	[ISS_DATA_DFSC_PF_L3] = data_abort,
+	[ISS_DATA_DFSC_TAG] = tag_check_abort,
 	[ISS_DATA_DFSC_ALIGN] = align_abort,
 	[ISS_DATA_DFSC_EXT] =  external_abort,
 	[ISS_DATA_DFSC_EXT_L0] =  external_abort,
@@ -248,6 +250,30 @@ external_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 	print_gp_register("far", far);
 	printf(" esr: 0x%.16lx\n", esr);
 	panic("Unhandled external data abort");
+}
+
+static void
+tag_check_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
+    uint64_t far, int lower)
+{
+	uint64_t exception;
+
+	/**
+	 * A Tag Check Fault should be handled as a SIGSEGV if it occurs at EL0 and
+	 * a kernel panic if at EL1.
+	 */
+	exception = ESR_ELx_EXCEPTION(esr);
+	if (lower) {
+		if (!undef_insn(frame))
+			call_trapsignal(td, SIGSEGV, SEGV_MTESERR, (void *)far,
+				exception);
+		userret(td, frame);
+	} else {
+		print_registers(frame);
+		print_gp_register("far", far);
+		print_gp_register("esr", esr);
+		panic("Tag Check Fault");
+	}
 }
 
 /*
