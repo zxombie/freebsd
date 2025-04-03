@@ -67,6 +67,16 @@ struct lookup_irq_request {
 
 static char *pcilink_ids[] = { "PNP0C0F", NULL };
 
+/*
+ * Devices that do not advertise as a PCI root bridge, but still
+ * reference the PCI resources.
+ */
+static char *pcilike_ids[] = {
+    "CIXH2020",	/* PRCx on Radxa Orion O6 */
+    NULL
+};
+
+
 static ACPI_STATUS
 acpi_lookup_irq_handler(ACPI_RESOURCE *res, void *context)
 {
@@ -603,7 +613,7 @@ acpi_res_ignore(device_t dev, int type, rman_res_t start, rman_res_t count)
 {
     struct acpi_device *ad = device_get_ivars(dev);
     ACPI_DEVICE_INFO *devinfo;
-    bool allow;
+    bool allow, is_pcilike;
 
     /* Ignore IRQ resources for PCI link devices. */
     if (type == SYS_RES_IRQ &&
@@ -620,19 +630,24 @@ acpi_res_ignore(device_t dev, int type, rman_res_t start, rman_res_t count)
      * access.
      */
     if (type == SYS_RES_MEMORY || type == SYS_RES_IOPORT) {
-	if (ACPI_SUCCESS(AcpiGetObjectInfo(ad->ad_handle, &devinfo))) {
-	    if ((devinfo->Flags & ACPI_PCI_ROOT_BRIDGE) != 0) {
-#if defined(__i386__) || defined(__amd64__)
-		allow = (type == SYS_RES_IOPORT && start == CONF1_ADDR_PORT);
-#else
-		allow = false;
-#endif
-		if (!allow) {
-		    AcpiOsFree(devinfo);
-		    return (true);
-		}
-	    }
+	is_pcilike = false;
+
+	if (ACPI_ID_PROBE(device_get_parent(dev), dev, pcilike_ids, NULL) <= 0){
+		is_pcilike = true;
+	} else if (ACPI_SUCCESS(AcpiGetObjectInfo(ad->ad_handle, &devinfo))) {
+	    if ((devinfo->Flags & ACPI_PCI_ROOT_BRIDGE) != 0)
+		is_pcilike = true;
 	    AcpiOsFree(devinfo);
+	}
+
+	if (is_pcilike) {
+#if defined(__i386__) || defined(__amd64__)
+	    allow = (type == SYS_RES_IOPORT && start == CONF1_ADDR_PORT);
+#else
+	    allow = false;
+#endif
+	    if (!allow)
+		return (true);
 	}
     }
 
