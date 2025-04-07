@@ -324,6 +324,28 @@ ofw_fdt_getproplen(ofw_t ofw, phandle_t package, const char *propname)
 	return (len);
 }
 
+const void *ofw_fdt_getprop_raw(phandle_t, const char *, int *);
+
+const void *
+ofw_fdt_getprop_raw(phandle_t package, const char *propname, int *proplen)
+{
+	const void *prop;
+	int len, offset;
+
+	if (fdtp == NULL)
+		return (NULL);
+
+	offset = fdt_phandle_offset(package);
+	if (offset < 0)
+		return (NULL);
+
+	prop = fdt_getprop(fdtp, offset, propname, &len);
+	if (prop != NULL && proplen != NULL)
+		*proplen = len;
+
+	return (prop);
+}
+
 /* Get the value of a property of a package. */
 static ssize_t
 ofw_fdt_getprop(ofw_t ofw, phandle_t package, const char *propname, void *buf,

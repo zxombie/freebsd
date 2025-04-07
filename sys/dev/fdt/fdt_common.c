@@ -68,6 +68,8 @@ vm_offset_t fdt_immr_size;
 
 struct fdt_ic_list fdt_ic_list_head = SLIST_HEAD_INITIALIZER(fdt_ic_list_head);
 
+const void *ofw_fdt_getprop_raw(phandle_t, const char *, int *);
+
 static int
 fdt_get_range_by_busaddr(phandle_t node, u_long addr, u_long *base,
     u_long *size)
@@ -446,8 +448,7 @@ int
 fdt_foreach_reserved_region(fdt_mem_region_cb cb, void *arg)
 {
 	struct mem_region mr;
-	pcell_t reserve[FDT_REG_CELLS * FDT_MEM_REGIONS];
-	pcell_t *reservep;
+	const pcell_t *reservep;
 	phandle_t memory, root;
 	int addr_cells, size_cells;
 	int i, res_len, rv, tuple_size, tuples;
@@ -466,15 +467,14 @@ fdt_foreach_reserved_region(fdt_mem_region_cb cb, void *arg)
 
 	tuple_size = sizeof(pcell_t) * (addr_cells + size_cells);
 
-	res_len = OF_getproplen(root, "memreserve");
-	if (res_len <= 0 || res_len > sizeof(reserve))
-		return (ERANGE);
-
-	if (OF_getprop(root, "memreserve", reserve, res_len) <= 0)
+	reservep = ofw_fdt_getprop_raw(root, "memreserve", &res_len);
+	if (reservep == NULL)
 		return (ENXIO);
 
+	if (res_len <= 0)
+		return (ERANGE);
+
 	tuples = res_len / tuple_size;
-	reservep = (pcell_t *)&reserve;
 	for (i = 0; i < tuples; i++) {
 
 		rv = fdt_data_to_res(reservep, addr_cells, size_cells,
@@ -495,10 +495,10 @@ int
 fdt_foreach_reserved_mem(fdt_mem_region_cb cb, void *arg)
 {
 	struct mem_region mr;
-	pcell_t reg[FDT_REG_CELLS];
+	const pcell_t *regp;
 	phandle_t child, root;
 	int addr_cells, size_cells;
-	int rv;
+	int reg_len, rv;
 
 	root = OF_finddevice("/reserved-memory");
 	if (root == -1)
@@ -507,20 +507,20 @@ fdt_foreach_reserved_mem(fdt_mem_region_cb cb, void *arg)
 	if ((rv = fdt_addrsize_cells(root, &addr_cells, &size_cells)) != 0)
 		return (rv);
 
-	if (addr_cells + size_cells > FDT_REG_CELLS)
-		panic("Too many address and size cells %d %d", addr_cells,
-		    size_cells);
-
 	for (child = OF_child(root); child != 0; child = OF_peer(child)) {
 		if (!OF_hasprop(child, "no-map"))
 			continue;
 
-		rv = OF_getprop(child, "reg", reg, sizeof(reg));
-		if (rv <= 0)
+		regp = ofw_fdt_getprop_raw(child, "reg", &reg_len);
+		if (regp == NULL)
 			/* XXX: Does a no-map of a dynamic range make sense? */
 			continue;
 
-		fdt_data_to_res(reg, addr_cells, size_cells,
+		if (addr_cells + size_cells > reg_len)
+			panic("Too many address and size cells %d + %d > %d",
+			    addr_cells, size_cells, reg_len);
+
+		fdt_data_to_res(regp, addr_cells, size_cells,
 		    (u_long *)&mr.mr_start, (u_long *)&mr.mr_size);
 
 		cb(&mr, arg);
@@ -533,8 +533,7 @@ int
 fdt_foreach_mem_region(fdt_mem_region_cb cb, void *arg)
 {
 	struct mem_region mr;
-	pcell_t reg[FDT_REG_CELLS * FDT_MEM_REGIONS];
-	pcell_t *regp;
+	const pcell_t *regp;
 	phandle_t memory;
 	int addr_cells, size_cells;
 	int i, reg_len, rv, tuple_size, tuples;
@@ -551,15 +550,15 @@ fdt_foreach_mem_region(fdt_mem_region_cb cb, void *arg)
 		return (ERANGE);
 
 	tuple_size = sizeof(pcell_t) * (addr_cells + size_cells);
-	reg_len = OF_getproplen(memory, "reg");
-	if (reg_len <= 0 || reg_len > sizeof(reg))
-		return (ERANGE);
 
-	if (OF_getprop(memory, "reg", reg, reg_len) <= 0)
+	regp = ofw_fdt_getprop_raw(memory, "reg", &reg_len);
+	if (regp == NULL)
 		return (ENXIO);
 
+	if (reg_len <= 0)
+		return (ERANGE);
+
 	tuples = reg_len / tuple_size;
-	regp = (pcell_t *)&reg;
 	for (i = 0; i < tuples; i++) {
 
 		rv = fdt_data_to_res(regp, addr_cells, size_cells,
