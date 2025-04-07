@@ -505,68 +505,88 @@ fdt_get_reserved_mem(struct mem_region *reserved, int *mreserved)
 }
 
 int
-fdt_get_mem_regions(struct mem_region *mr, int *mrcnt, uint64_t *memsize)
+fdt_foreach_mem_region(fdt_mem_region_cb cb, void *arg)
 {
+	struct mem_region mr;
 	pcell_t reg[FDT_REG_CELLS * FDT_MEM_REGIONS];
 	pcell_t *regp;
 	phandle_t memory;
-	uint64_t memory_size;
 	int addr_cells, size_cells;
 	int i, reg_len, rv, tuple_size, tuples;
 
 	memory = OF_finddevice("/memory");
-	if (memory == -1) {
-		rv = ENXIO;
-		goto out;
-	}
+	if (memory == -1)
+		return (ENXIO);
 
 	if ((rv = fdt_addrsize_cells(OF_parent(memory), &addr_cells,
 	    &size_cells)) != 0)
-		goto out;
+		return (rv);
 
-	if (addr_cells > 2) {
-		rv = ERANGE;
-		goto out;
-	}
+	if (addr_cells > 2)
+		return (ERANGE);
 
 	tuple_size = sizeof(pcell_t) * (addr_cells + size_cells);
 	reg_len = OF_getproplen(memory, "reg");
-	if (reg_len <= 0 || reg_len > sizeof(reg)) {
-		rv = ERANGE;
-		goto out;
-	}
+	if (reg_len <= 0 || reg_len > sizeof(reg))
+		return (ERANGE);
 
-	if (OF_getprop(memory, "reg", reg, reg_len) <= 0) {
-		rv = ENXIO;
-		goto out;
-	}
+	if (OF_getprop(memory, "reg", reg, reg_len) <= 0)
+		return (ENXIO);
 
-	memory_size = 0;
 	tuples = reg_len / tuple_size;
 	regp = (pcell_t *)&reg;
 	for (i = 0; i < tuples; i++) {
 
 		rv = fdt_data_to_res(regp, addr_cells, size_cells,
-			(u_long *)&mr[i].mr_start, (u_long *)&mr[i].mr_size);
+			(u_long *)&mr.mr_start, (u_long *)&mr.mr_size);
 
 		if (rv != 0)
-			goto out;
+			return (rv);
+
+		cb(&mr, arg);
 
 		regp += addr_cells + size_cells;
-		memory_size += mr[i].mr_size;
 	}
 
-	if (memory_size == 0) {
-		rv = ERANGE;
-		goto out;
-	}
+	return (0);
+}
 
-	*mrcnt = i;
+struct mem_region_data {
+	struct mem_region *mr;
+	uint64_t memsize;
+	int mrcnt;
+};
+
+static void
+fdt_get_mem_regions_cb(struct mem_region *mr, void *arg)
+{
+	struct mem_region_data *data = arg;
+
+	data->mr[data->mrcnt] = *mr;
+	data->mrcnt++;
+	data->memsize += mr->mr_size;
+}
+
+int
+fdt_get_mem_regions(struct mem_region *mr, int *mrcnt, uint64_t *memsize)
+{
+	struct mem_region_data data;
+	int rv;
+
+	memset(&data, 0, sizeof(data));
+	data.mr = mr;
+
+	rv = fdt_foreach_mem_region(fdt_get_mem_regions_cb, &data);
+	if (rv != 0)
+		return (rv);
+	if (data.memsize == 0)
+		return (ERANGE);
+
+	*mrcnt = data.mrcnt;
 	if (memsize != NULL)
-		*memsize = memory_size;
-	rv = 0;
-out:
-	return (rv);
+		*memsize = data.memsize;
+
+	return (0);
 }
 
 int
