@@ -69,8 +69,12 @@ struct md_page {
 	TAILQ_HEAD(,pv_entry)	pv_list;
 	int			pv_gen;
 	vm_memattr_t		pv_memattr;
-	uint8_t			pv_reserve[3];
+	uint8_t			pv_flags;
+	uint8_t			pv_reserve[2];
 };
+
+/* machine page flags */
+#define PV_MTE_TAGGED	0x01	/* page is tagged with MTE */
 
 enum pmap_stage {
 	PM_INVALID,

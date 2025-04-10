@@ -41,12 +41,50 @@ static bool __read_mostly mte_enabled = false;
 
 struct thread *mte_switch(struct thread *);
 
+/* Fetch the block size used by tag load and store instructions */
+static inline size_t
+mte_block_size(void)
+{
+	return (sizeof(int) << GMID_BS_SIZE(READ_SPECIALREG(GMID_EL1_REG)));
+}
+
 static void
 mte_update_sctlr(struct thread *td, uint64_t sctlr)
 {
 	MPASS((sctlr & ~SCTLR_TCF0_MASK) == 0);
 	td->td_pcb->pcb_sctlr &= SCTLR_TCF0_MASK;
 	td->td_pcb->pcb_sctlr |= sctlr;
+}
+
+/**
+ * Clear/sync the allocation tags for a given page. This should be done on
+ * allocation of a page to ensure a tag check fault does not occur immediately
+ * after accessing newly tagged memory.
+ */
+void
+mte_sync_tags(vm_page_t page)
+{
+	size_t block_size;
+	vm_offset_t addr;
+
+	if (!mte_enabled)
+		return;
+
+	/* don't clear the tags on a page that's already setup for mte */
+	if ((page->md.pv_flags & PV_MTE_TAGGED))
+		return;
+
+	block_size = mte_block_size();
+	addr = PHYS_TO_DMAP(page->phys_addr);
+
+	for (size_t count = 0; count < PAGE_SIZE;
+	    count += block_size, addr += block_size)
+		asm volatile(
+		    ".arch_extension memtag	\n"
+		    "stgm xzr, [%0]		\n"
+		    ".arch_extension nomemtag" : : "r" (addr));
+
+	page->md.pv_flags |= PV_MTE_TAGGED;
 }
 
 void
