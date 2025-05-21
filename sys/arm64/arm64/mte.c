@@ -41,6 +41,22 @@ static bool __read_mostly mte_enabled = false;
 
 struct thread *mte_switch(struct thread *);
 
+#define load_tags(addr) ({						\
+	uint64_t __val;							\
+	asm volatile(							\
+	    ".arch_extension memtag	\n"				\
+	    "ldgm %0, [%1]		\n"				\
+	    ".arch_extension nomemtag" : "=r" (__val) : "r" (addr));	\
+	__val;								\
+})
+
+#define set_tags(tags, addr) do {					\
+	asm volatile(							\
+	    ".arch_extension memtag	\n"				\
+	    "stgm %0, [%0]		\n"				\
+	    ".arch_extension nomemtag" : "=r" (tags) : "r" (addr));	\
+} while (0)
+
 /* Fetch the block size used by tag load and store instructions */
 static inline size_t
 mte_block_size(void)
@@ -85,6 +101,32 @@ mte_sync_tags(vm_page_t page)
 		    ".arch_extension nomemtag" : : "r" (addr));
 
 	page->md.pv_flags |= PV_MTE_TAGGED;
+}
+
+/**
+ * Copy the allocation tags from given target to destination page. This is called
+ * on a copy-on-write and anything that causes a pmap_copy_page call.
+ */
+void
+mte_copy_tags(vm_page_t srcpage, vm_page_t dstpage, vm_offset_t src, vm_offset_t dst)
+{
+	size_t block_size;
+	uint64_t tags;
+
+	// TOOD: do we need to do anything if the dst page is already tagged?
+	if (dstpage->md.pv_flags == PV_MTE_TAGGED)
+		mte_sync_tags(dstpage);
+
+	/*
+	 * Copy the tags from the source page to the destination page,
+	 * incrementing by the block count read from GMID_EL1
+	 */
+	block_size = mte_block_size();
+	for (size_t count = 0; count < PAGE_SIZE;
+	    count += block_size, src += block_size, dst += block_size) {
+		tags = load_tags(src);
+		set_tags(tags, dst);
+	}
 }
 
 void
