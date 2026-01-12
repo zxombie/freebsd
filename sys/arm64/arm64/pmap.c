@@ -1164,7 +1164,7 @@ pmap_bootstrap_l2_block(struct pmap_bootstrap_state *state, int i)
 		MPASS(state->l2[l2_slot] == 0);
 		pmap_store(&state->l2[l2_slot], PHYS_TO_PTE(state->pa) |
 		    ATTR_AF | pmap_sh_attr | ATTR_S1_XN | ATTR_KERN_GP |
-		    ATTR_S1_IDX(VM_MEMATTR_WRITE_BACK) | contig | L2_BLOCK);
+		    ATTR_S1_IDX(VM_MEMATTR_TAGGED) | contig | L2_BLOCK);
 	}
 	MPASS(state->va == (state->pa - dmap_phys_base + DMAP_MIN_ADDRESS));
 }
@@ -1214,7 +1214,7 @@ pmap_bootstrap_l3_page(struct pmap_bootstrap_state *state, int i)
 		MPASS(state->l3[l3_slot] == 0);
 		pmap_store(&state->l3[l3_slot], PHYS_TO_PTE(state->pa) |
 		    ATTR_AF | pmap_sh_attr | ATTR_S1_XN | ATTR_KERN_GP |
-		    ATTR_S1_IDX(VM_MEMATTR_WRITE_BACK) | contig | L3_PAGE);
+		    ATTR_S1_IDX(VM_MEMATTR_TAGGED) | contig | L3_PAGE);
 	}
 	MPASS(state->va == (state->pa - dmap_phys_base + DMAP_MIN_ADDRESS));
 }
@@ -1274,7 +1274,7 @@ pmap_bootstrap_dmap(vm_size_t kernlen)
 				    &bs_state.l1[pmap_l1_index(bs_state.va)],
 				    PHYS_TO_PTE(bs_state.pa) | ATTR_AF |
 				    pmap_sh_attr |
-				    ATTR_S1_IDX(VM_MEMATTR_WRITE_BACK) |
+				    ATTR_S1_IDX(VM_MEMATTR_TAGGED) |
 				    ATTR_S1_XN | ATTR_KERN_GP | L1_BLOCK);
 			}
 			MPASS(bs_state.pa <= physmap[i + 1]);
@@ -9987,6 +9987,9 @@ sysctl_kmaps_dump(struct sbuf *sb, struct pmap_kernel_map_range *range,
 		break;
 	case ATTR_S1_IDX(VM_MEMATTR_WRITE_THROUGH):
 		mode = "WT";
+		break;
+	case ATTR_S1_IDX(VM_MEMATTR_TAGGED):
+		mode = "TAGGED";
 		break;
 	default:
 		printf(
