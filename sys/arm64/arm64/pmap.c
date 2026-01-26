@@ -9284,6 +9284,7 @@ pmap_switch(struct thread *new)
 {
 	pcpu_bp_harden bp_harden;
 	struct pcb *pcb;
+	uint64_t sctlr;
 
 	/* Store the new curthread */
 	PCPU_SET(curthread, new);
@@ -9291,6 +9292,15 @@ pmap_switch(struct thread *new)
 	/* And the new pcb */
 	pcb = new->td_pcb;
 	PCPU_SET(curpcb, pcb);
+
+	/* TODO: Skip when new is a kernel thread */
+	sctlr = READ_SPECIALREG(sctlr_el1);
+	if ((sctlr & SCTLR_USER_MASK) != pcb->pcb_sctlr) {
+		sctlr &= ~SCTLR_USER_MASK;
+		sctlr |= pcb->pcb_sctlr;
+		WRITE_SPECIALREG(sctlr_el1, sctlr);
+		isb();
+	}
 
 	/*
 	 * TODO: We may need to flush the cache here if switching

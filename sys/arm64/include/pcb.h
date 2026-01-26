@@ -71,7 +71,8 @@ struct pcb {
 #define	PCB_FP_USERMASK	(PCB_FP_STARTED | PCB_FP_SVEVALID)
 	u_int		pcb_vfpcpu;	/* Last cpu this thread ran VFP code */
 	void		*pcb_svesaved;
-	uint64_t	pcb_reserved[4];
+	uint64_t	pcb_sctlr;
+	uint64_t	pcb_reserved[3];
 
 	/*
 	 * The userspace VFP state. The pcb_fpusaved pointer will point to
