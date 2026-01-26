@@ -99,6 +99,7 @@ cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 	bzero(&pcb2->pcb_dbg_regs, sizeof(pcb2->pcb_dbg_regs));
 
 	ptrauth_fork(td2, td1);
+	mte_fork(td2, td1);
 
 	tf = (struct trapframe *)STACKALIGN((struct trapframe *)pcb2 - 1);
 	bcopy(td1->td_frame, tf, sizeof(*tf));
@@ -199,6 +200,7 @@ cpu_copy_thread(struct thread *td, struct thread *td0)
 
 	/* Generate new pointer authentication keys. */
 	ptrauth_copy_thread(td, td0);
+	mte_copy_thread(td, td0);
 }
 
 /*
@@ -267,6 +269,7 @@ cpu_thread_alloc(struct thread *td)
 	td->td_frame = (struct trapframe *)STACKALIGN(
 	    (struct trapframe *)td->td_pcb - 1);
 	ptrauth_thread_alloc(td);
+	mte_thread_alloc(td);
 }
 
 void
