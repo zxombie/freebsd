@@ -272,7 +272,7 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 		    "both SHARED and PRIVATE set (flags %#jx)", flags));
 	}
 	if (prot != PROT_NONE &&
-	    (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) != 0) {
+	    (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC | PROT_MTE)) != 0) {
 		return (EXTERROR(EINVAL, "invalid prot %#jx", prot));
 	}
 	if ((flags & MAP_GUARD) != 0 && (prot != PROT_NONE || fd != -1 ||
@@ -673,7 +673,7 @@ kern_mprotect(struct thread *td, uintptr_t addr0, size_t size, int prot,
 	int vm_error, max_prot;
 
 	addr = addr0;
-	if ((prot & ~(_PROT_ALL | PROT_MAX(_PROT_ALL))) != 0)
+	if ((prot & ~(_PROT_ALL | PROT_MAX(_PROT_ALL) | PROT_MTE)) != 0)
 		return (EINVAL);
 	max_prot = PROT_MAX_EXTRACT(prot);
 	prot = PROT_EXTRACT(prot);

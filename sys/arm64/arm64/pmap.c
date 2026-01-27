@@ -5381,11 +5381,19 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 	pv_entry_t pv;
 	vm_paddr_t opa, pa;
 	vm_page_t mpte, om;
+	vm_memattr_t memattr;
 	bool nosleep;
 	int full_lvl, lvl, rv;
 
 	KASSERT(ADDR_IS_CANONICAL(va),
 	    ("%s: Address not in canonical form: %lx", __func__, va));
+
+	memattr = m->md.pv_memattr;
+	if ((prot & PROT_MTE) != 0) {
+		MPASS(memattr == VM_MEMATTR_DEFAULT);
+		memattr = VM_MEMATTR_TAGGED;
+		mte_sync_tags(m);
+	}
 
 	va = trunc_page(va);
 	if ((m->oflags & VPO_UNMANAGED) == 0)
@@ -5393,7 +5401,7 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 	pa = VM_PAGE_TO_PHYS(m);
 	new_l3 = (pt_entry_t)(PHYS_TO_PTE(pa) | ATTR_AF | pmap_sh_attr |
 	    L3_PAGE);
-	new_l3 |= pmap_pte_memattr(pmap, m->md.pv_memattr);
+	new_l3 |= pmap_pte_memattr(pmap, memattr);
 	new_l3 |= pmap_pte_prot(pmap, prot);
 	if ((flags & PMAP_ENTER_WIRED) != 0)
 		new_l3 |= ATTR_SW_WIRED;
