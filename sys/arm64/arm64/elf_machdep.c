@@ -179,10 +179,15 @@ static int
 reloc_instr_imm(Elf32_Addr *where, Elf_Addr val, u_int msb, u_int lsb,
     u_int imm_base)
 {
+	void *kaddr;
 
 	/* Check bounds: upper bits must be all ones or all zeros. */
 	if ((uint64_t)((int64_t)val >> (msb + 1)) + 1 > 1)
 		return (-1);
+	if (!arm64_get_writable_addr(where, &kaddr))
+		return (-1);
+	where = kaddr;
+
 	val >>= lsb;
 	val &= (1 << (msb - lsb + 1)) - 1;
 	val <<= imm_base;
