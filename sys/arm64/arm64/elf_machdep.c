@@ -195,6 +195,25 @@ reloc_instr_imm(Elf32_Addr *where, Elf_Addr val, u_int msb, u_int lsb,
 	return (0);
 }
 
+static int
+reloc_instr_adrp(Elf32_Addr *where, Elf_Addr val)
+{
+	void *kaddr;
+	u_int msb = 32;
+
+	/* Check bounds: upper bits must be all ones or all zeros. */
+	if ((uint64_t)((int64_t)val >> (msb + 1)) + 1 > 1)
+		return (-1);
+	if (!arm64_get_writable_addr(where, &kaddr))
+		return (-1);
+	where = kaddr;
+
+	val >>= 12;
+	val = ((val & 0x3) << 29) | (((val >> 2) & 0x7ffff) << 5);
+	*where |= (Elf32_Addr)val;
+	return (0);
+}
+
 /*
  * Process a relocation.  Support for some static relocations is required
  * in order for the -zifunc-noplt optimization to work.
@@ -247,6 +266,21 @@ elf_reloc_internal(linker_file_t lf, Elf_Addr relocbase, const void *data,
 	switch (rtype) {
 	case R_AARCH64_NONE:
 	case R_AARCH64_RELATIVE:
+		break;
+	case R_AARCH64_ADR_PREL_PG_HI21:
+		error = lookup(lf, symidx, 1, &addr);
+		if (error != 0)
+			return (-1);
+		error = reloc_instr_adrp((Elf32_Addr *)where,
+		    ((addr + addend) & ~0xffful) -
+		    ((Elf_Addr)where & ~0xffful));
+		break;
+	case R_AARCH64_ADD_ABS_LO12_NC:
+		error = lookup(lf, symidx, 1, &addr);
+		if (error != 0)
+			return (-1);
+		error = reloc_instr_imm((Elf32_Addr *)where,
+		    (addr + addend) & 0xfff, 11, 0, 10);
 		break;
 	case R_AARCH64_TSTBR14:
 		error = lookup(lf, symidx, 1, &addr);

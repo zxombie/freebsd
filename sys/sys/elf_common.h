@@ -1090,6 +1090,8 @@ typedef struct {
 #define	R_AARCH64_PREL64	260	/* PC relative */
 #define	R_AARCH64_PREL32	261	/* PC relative, 32-bit overflow check */
 #define	R_AARCH64_PREL16	262	/* PC relative, 16-bit overflow check */
+#define	R_AARCH64_ADR_PREL_PG_HI21 275
+#define	R_AARCH64_ADD_ABS_LO12_NC 277
 #define	R_AARCH64_TSTBR14	279	/* TBZ/TBNZ immediate */
 #define	R_AARCH64_CONDBR19	280	/* Conditional branch immediate */
 #define	R_AARCH64_JUMP26	282	/* Branch immediate */
