@@ -84,7 +84,7 @@ void
 pcpu_init(struct pcpu *pcpu, int cpuid, size_t size)
 {
 
-	bzero(pcpu, size);
+	bzero_early(pcpu, size);
 	KASSERT(cpuid >= 0 && cpuid < MAXCPU,
 	    ("pcpu_init: invalid cpuid %d", cpuid));
 	pcpu->pc_cpuid = cpuid;

@@ -361,7 +361,7 @@ ofw_fdt_getprop(ofw_t ofw, phandle_t package, const char *propname, void *buf,
 	if (prop == NULL)
 		return (-1);
 
-	bcopy(prop, buf, min(len, buflen));
+	bcopy_early(prop, buf, min(len, buflen));
 
 	return (len);
 }

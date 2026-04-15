@@ -799,7 +799,6 @@ initarm(struct arm64_bootparams *abp)
 	update_special_regs(0);
 
 	sched_instance_select();
-	link_elf_ireloc();
 
 	/* Set the pcpu data, this is needed by pmap_bootstrap */
 	pcpup = &pcpu0;
@@ -846,9 +845,6 @@ initarm(struct arm64_bootparams *abp)
 		physmem_exclude_region(efifb->fb_addr, efifb->fb_size,
 		    EXFLAG_NOALLOC);
 
-	/* Do basic tuning, hz etc */
-	init_param1();
-
 	cache_setup();
 
 	/*
@@ -863,6 +859,12 @@ initarm(struct arm64_bootparams *abp)
 	 *   pmap_bootstrap() is called.
 	 */
 	pmap_bootstrap_dmap(lastaddr - KERNBASE);
+
+	link_elf_ireloc();
+
+	/* Do basic tuning, hz etc */
+	init_param1();
+
 	/*
 	 * Exclude EFI entries needed in the DMAP, e.g. EFI_MD_TYPE_RECLAIM
 	 * may contain the ACPI tables but shouldn't be used by the kernel
