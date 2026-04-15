@@ -176,7 +176,8 @@ elf_is_ifunc_reloc(Elf_Size r_info __unused)
 }
 
 static int
-reloc_instr_imm(Elf32_Addr *where, Elf_Addr val, u_int msb, u_int lsb)
+reloc_instr_imm(Elf32_Addr *where, Elf_Addr val, u_int msb, u_int lsb,
+    u_int imm_base)
 {
 
 	/* Check bounds: upper bits must be all ones or all zeros. */
@@ -184,6 +185,7 @@ reloc_instr_imm(Elf32_Addr *where, Elf_Addr val, u_int msb, u_int lsb)
 		return (-1);
 	val >>= lsb;
 	val &= (1 << (msb - lsb + 1)) - 1;
+	val <<= imm_base;
 	*where |= (Elf32_Addr)val;
 	return (0);
 }
@@ -246,14 +248,14 @@ elf_reloc_internal(linker_file_t lf, Elf_Addr relocbase, const void *data,
 		if (error != 0)
 			return (-1);
 		error = reloc_instr_imm((Elf32_Addr *)where,
-		    addr + addend - (Elf_Addr)where, 15, 2);
+		    addr + addend - (Elf_Addr)where, 15, 2, 5);
 		break;
 	case R_AARCH64_CONDBR19:
 		error = lookup(lf, symidx, 1, &addr);
 		if (error != 0)
 			return (-1);
 		error = reloc_instr_imm((Elf32_Addr *)where,
-		    addr + addend - (Elf_Addr)where, 20, 2);
+		    addr + addend - (Elf_Addr)where, 20, 2, 5);
 		break;
 	case R_AARCH64_JUMP26:
 	case R_AARCH64_CALL26:
@@ -261,7 +263,7 @@ elf_reloc_internal(linker_file_t lf, Elf_Addr relocbase, const void *data,
 		if (error != 0)
 			return (-1);
 		error = reloc_instr_imm((Elf32_Addr *)where,
-		    addr + addend - (Elf_Addr)where, 27, 2);
+		    addr + addend - (Elf_Addr)where, 27, 2, 0);
 		break;
 	case R_AARCH64_ABS64:
 	case R_AARCH64_GLOB_DAT:
