@@ -192,6 +192,7 @@ reloc_instr_imm(Elf32_Addr *where, Elf_Addr val, u_int msb, u_int lsb,
 	val &= (1 << (msb - lsb + 1)) - 1;
 	val <<= imm_base;
 	*where |= (Elf32_Addr)val;
+	cpu_icache_sync_range(where, sizeof(*where));
 	return (0);
 }
 
@@ -211,6 +212,7 @@ reloc_instr_adrp(Elf32_Addr *where, Elf_Addr val)
 	val >>= 12;
 	val = ((val & 0x3) << 29) | (((val >> 2) & 0x7ffff) << 5);
 	*where |= (Elf32_Addr)val;
+	cpu_icache_sync_range(where, sizeof(*where));
 	return (0);
 }
 
