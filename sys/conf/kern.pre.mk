@@ -117,6 +117,14 @@ CFLAGS+=	${CONF_CFLAGS}
 
 LDFLAGS+=	--build-id=sha1
 
+.if ${MACHINE_CPUARCH} == "aarch64"
+.if defined(LINKER_FEATURES) && !${LINKER_FEATURES:Mifunc-noplt}
+.warning "Linker ${LD} does not support -z ifunc-noplt -> ifunc calls are unoptimized."
+.else
+LDFLAGS+=	-z notext -z ifunc-noplt
+.endif
+.endif
+
 .if ${MACHINE_CPUARCH} == "amd64"
 LDFLAGS+=	-z max-page-size=2097152
 .if ${LINKER_TYPE} != "lld"
